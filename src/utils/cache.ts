@@ -2,7 +2,7 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { Movie, GraphData } from '../types';
 
 const DB_NAME = 'movie-network-viz';
-const DB_VERSION = 1;
+const DB_VERSION = 3; // Bumped to invalidate old cache with 100 movies
 
 interface MovieCacheDB {
   movies: Movie[];
@@ -63,9 +63,9 @@ export const loadGraphData = async (): Promise<{
       return null;
     }
 
-    // Check if cache is less than 24 hours old
+    // Check if cache is less than 7 days old (longer cache for 1000 movies)
     const cacheAge = Date.now() - cached.timestamp;
-    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     if (cacheAge > maxAge) {
       console.log('Cache is too old, ignoring');
@@ -100,7 +100,7 @@ export const hasCachedData = async (): Promise<boolean> => {
     const db = await initDB();
     const cached = await db.get('cache', 'graph-data');
     return !!cached;
-  } catch (error) {
+  } catch {
     return false;
   }
 };

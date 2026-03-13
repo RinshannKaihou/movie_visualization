@@ -41,17 +41,39 @@ export const SearchBar = () => {
   };
 
   return (
-    <div className="absolute top-4 right-4 z-10 animate-fade-in">
-      <div
-        className={`relative flex items-center bg-[#12121a]/90 backdrop-blur-sm rounded-lg border transition-all duration-200 ${
-          isFocused
-            ? 'border-[#00d4ff]/50 shadow-lg shadow-[#00d4ff]/10'
-            : 'border-white/10'
-        }`}
-      >
+    <div style={{
+      position: 'absolute',
+      top: 80,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 10,
+    }}>
+      <div style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        backgroundColor: isFocused ? 'rgba(13, 13, 21, 0.95)' : 'rgba(13, 13, 21, 0.8)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderRadius: 14,
+        border: isFocused 
+          ? '1px solid rgba(0, 212, 255, 0.4)' 
+          : '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: isFocused 
+          ? '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 4px rgba(0, 212, 255, 0.1)' 
+          : '0 8px 32px rgba(0, 0, 0, 0.3)',
+        transition: 'all 200ms ease',
+        width: 360,
+      }}>
         {/* Search icon */}
         <svg
-          className="w-4 h-4 ml-3 text-white/40"
+          style={{
+            width: 18,
+            height: 18,
+            marginLeft: 16,
+            color: isFocused ? '#00d4ff' : 'rgba(255, 255, 255, 0.4)',
+            transition: 'color 200ms',
+          }}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -73,28 +95,86 @@ export const SearchBar = () => {
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           placeholder="Search movies..."
-          className="w-64 px-3 py-2.5 bg-transparent text-sm text-white placeholder-white/40 focus:outline-none"
+          style={{
+            flex: 1,
+            padding: '14px 12px',
+            backgroundColor: 'transparent',
+            border: 'none',
+            outline: 'none',
+            fontSize: 14,
+            color: '#ffffff',
+            fontFamily: 'inherit',
+          }}
         />
 
-        {/* Match count or clear button */}
+        {/* Match count or keyboard shortcut */}
         {localQuery ? (
-          <div className="flex items-center mr-2 gap-2">
-            <span className="text-xs text-white/40 tabular-nums">
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            marginRight: 12,
+          }}>
+            <span style={{
+              fontSize: 12,
+              color: '#00d4ff',
+              fontWeight: 500,
+            }}>
               {searchMatches.size} found
             </span>
             <button
               onClick={handleClear}
-              className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                border: 'none',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'rgba(255, 255, 255, 0.6)',
+                transition: 'all 200ms',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
+              }}
             >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
         ) : (
-          <div className="mr-3 text-xs text-white/30">
-            <kbd className="px-1.5 py-0.5 bg-white/5 rounded text-[10px]">⌘</kbd>
-            <kbd className="px-1.5 py-0.5 bg-white/5 rounded text-[10px] ml-0.5">K</kbd>
+          <div style={{
+            marginRight: 12,
+            display: 'flex',
+            gap: 4,
+          }}>
+            <kbd style={{
+              padding: '4px 8px',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              borderRadius: 6,
+              fontSize: 11,
+              color: 'rgba(255, 255, 255, 0.4)',
+              fontFamily: 'inherit',
+              fontWeight: 500,
+            }}>⌘</kbd>
+            <kbd style={{
+              padding: '4px 8px',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              borderRadius: 6,
+              fontSize: 11,
+              color: 'rgba(255, 255, 255, 0.4)',
+              fontFamily: 'inherit',
+              fontWeight: 500,
+            }}>K</kbd>
           </div>
         )}
       </div>

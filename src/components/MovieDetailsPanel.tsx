@@ -1,173 +1,627 @@
+import { useMemo, useCallback } from 'react';
 import { useGraphStore } from '../stores/graphStore';
 import { useGraphFilters } from '../hooks/useGraphFilters';
-import { GENRE_COLORS } from '../types';
+import { GENRE_COLORS, CONNECTION_COLORS, type Movie, type ConnectionType } from '../types';
 
 export const MovieDetailsPanel = () => {
-  const { selectedMovie, selectMovie } = useGraphStore();
-  const { connectedMovieIds, filteredEdges } = useGraphFilters();
+  const { selectedMovie, selectMovie, nodes } = useGraphStore();
+  const { connectedMovieIds, connectedEdges } = useGraphFilters();
 
-  if (!selectedMovie) {
-    return (
-      <div className="absolute bottom-4 right-4 z-10 bg-[#12121a]/90 backdrop-blur-sm rounded-lg p-4 border border-white/10 shadow-xl max-w-xs animate-fade-in">
-        <div className="text-center text-white/50">
-          <svg
-            className="w-12 h-12 mx-auto mb-2 opacity-30"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
-            />
-          </svg>
-          <p className="text-sm">Click on a movie node to see details</p>
-        </div>
-      </div>
-    );
-  }
+  // Get related movies with connection info - MUST be before any conditional returns
+  const relatedMovies = useMemo(() => {
+    console.log('Computing relatedMovies:', { 
+      selectedMovieId: selectedMovie?.id, 
+      connectedCount: connectedMovieIds.size,
+      nodesCount: nodes.length 
+    });
+    
+    if (!selectedMovie || connectedMovieIds.size === 0) return [];
+    
+    const movieMap = new Map(nodes.map(n => [n.id, n]));
+    
+    return Array.from(connectedMovieIds).map(movieId => {
+      const movie = movieMap.get(movieId);
+      if (!movie) {
+        console.warn('Movie not found for id:', movieId);
+        return null;
+      }
+      
+      // Find all connection types to this movie
+      const connectionTypes: ConnectionType[] = [];
+      connectedEdges.forEach(edge => {
+        const otherId = edge.source === selectedMovie.id ? edge.target : 
+                       edge.target === selectedMovie.id ? edge.source : null;
+        if (otherId === movieId) {
+          connectionTypes.push(...edge.types);
+        }
+      });
+      
+      // Remove duplicates and get unique connection types
+      const uniqueTypes = Array.from(new Set(connectionTypes));
+      
+      return {
+        movie,
+        connectionTypes: uniqueTypes,
+        strength: uniqueTypes.length,
+      };
+    }).filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => b.strength - a.strength);
+  }, [selectedMovie, connectedMovieIds, connectedEdges, nodes]);
+
+  // Handle clicking on a related movie
+  const handleRelatedMovieClick = useCallback((movie: Movie) => {
+    console.log('Clicked related movie:', movie.id, movie.title);
+    selectMovie(movie);
+  }, [selectMovie]);
 
   // Count connections
   const connectionCount = connectedMovieIds.size;
 
   // Get connection breakdown
-  const connectionBreakdown = {
-    actor: 0,
-    director: 0,
-    genre: 0,
-    plot: 0,
-  };
+  const connectionBreakdown = useMemo(() => {
+    const breakdown = {
+      actor: 0,
+      director: 0,
+      genre: 0,
+      plot: 0,
+    };
 
-  filteredEdges.forEach(edge => {
-    if (edge.source === selectedMovie.id || edge.target === selectedMovie.id) {
+    connectedEdges.forEach(edge => {
       edge.types.forEach(type => {
-        if (type === 'same_actor') connectionBreakdown.actor++;
-        if (type === 'same_director') connectionBreakdown.director++;
-        if (type === 'same_genre') connectionBreakdown.genre++;
-        if (type === 'similar_plot') connectionBreakdown.plot++;
+        if (type === 'same_actor') breakdown.actor++;
+        if (type === 'same_director') breakdown.director++;
+        if (type === 'same_genre') breakdown.genre++;
+        if (type === 'similar_plot') breakdown.plot++;
       });
-    }
-  });
+    });
+
+    return breakdown;
+  }, [connectedEdges]);
+
+  // NOW we can do conditional rendering after all hooks are called
+  if (!selectedMovie) {
+    return (
+      <div style={{
+        position: 'absolute',
+        bottom: 80,
+        right: 24,
+        zIndex: 10,
+        width: 280,
+      }}>
+        <div style={{
+          backgroundColor: 'rgba(13, 13, 21, 0.7)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRadius: 16,
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+          padding: 32,
+          textAlign: 'center',
+        }}>
+          <div style={{
+            width: 64,
+            height: 64,
+            borderRadius: '50%',
+            backgroundColor: 'rgba(0, 212, 255, 0.1)',
+            border: '1px solid rgba(0, 212, 255, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 16px',
+          }}>
+            <svg
+              width="28"
+              height="28"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="#00d4ff"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
+              />
+            </svg>
+          </div>
+          <p style={{
+            fontSize: 14,
+            color: 'rgba(255, 255, 255, 0.5)',
+            margin: 0,
+            lineHeight: 1.5,
+          }}>
+            Click on a movie node<br />to explore details
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="absolute bottom-4 right-4 z-10 bg-[#12121a]/95 backdrop-blur-sm rounded-lg border border-white/10 shadow-xl w-80 max-h-[calc(100vh-2rem)] overflow-hidden animate-fade-in">
-      {/* Header with poster */}
-      <div className="relative">
-        {selectedMovie.poster && (
-          <div className="h-32 overflow-hidden">
+    <div style={{
+      position: 'absolute',
+      top: 80,
+      right: 24,
+      zIndex: 10,
+      width: 340,
+      maxHeight: 'calc(100vh - 160px)',
+    }}>
+      <div style={{
+        backgroundColor: 'rgba(13, 13, 21, 0.9)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderRadius: 20,
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 212, 255, 0.05)',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        maxHeight: 'calc(100vh - 160px)',
+      }}>
+        {/* Header with poster */}
+        <div style={{
+          position: 'relative',
+          height: 160,
+          overflow: 'hidden',
+        }}>
+          {selectedMovie.poster ? (
             <img
               src={selectedMovie.poster}
               alt={selectedMovie.title}
-              className="w-full h-full object-cover opacity-30"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                opacity: 0.4,
+              }}
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#12121a]" />
-          </div>
-        )}
+          ) : (
+            <div style={{
+              width: '100%',
+              height: '100%',
+              background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%)',
+            }} />
+          )}
+          
+          {/* Gradient overlay */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(13, 13, 21, 0.95) 100%)',
+          }} />
 
-        {/* Close button */}
-        <button
-          onClick={() => selectMovie(null)}
-          className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white/70 hover:text-white transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+          {/* Close button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              selectMovie(null);
+            }}
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 200ms',
+              color: 'rgba(255, 255, 255, 0.7)',
+              zIndex: 10,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.7)';
+            }}
+          >
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
 
-        {/* Title and year */}
-        <div className="absolute bottom-2 left-4 right-4">
-          <h2 className="text-lg font-bold text-white">{selectedMovie.title}</h2>
-          <p className="text-sm text-white/60">{selectedMovie.year}</p>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="p-4 space-y-4 overflow-y-auto max-h-[400px]">
-        {/* Rating */}
-        <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-          <span className="text-lg font-semibold text-white">{selectedMovie.rating.toFixed(1)}</span>
-          <span className="text-sm text-white/50">/ 10</span>
-        </div>
-
-        {/* Genres */}
-        <div>
-          <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">
-            Genres
-          </h3>
-          <div className="flex flex-wrap gap-1.5">
-            {selectedMovie.genres.map(genre => (
-              <span
-                key={genre}
-                className="px-2 py-0.5 text-xs font-medium rounded-full"
-                style={{
-                  backgroundColor: `${GENRE_COLORS[genre] || GENRE_COLORS.default}30`,
-                  color: GENRE_COLORS[genre] || GENRE_COLORS.default,
-                }}
-              >
-                {genre}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Directors */}
-        {selectedMovie.directors.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-1">
-              Director{selectedMovie.directors.length > 1 ? 's' : ''}
-            </h3>
-            <p className="text-sm text-white/80">{selectedMovie.directors.join(', ')}</p>
-          </div>
-        )}
-
-        {/* Cast */}
-        {selectedMovie.leadActors.length > 0 && (
-          <div>
-            <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-1">
-              Cast
-            </h3>
-            <p className="text-sm text-white/80">{selectedMovie.leadActors.slice(0, 4).join(', ')}</p>
-          </div>
-        )}
-
-        {/* Overview */}
-        {selectedMovie.overview && (
-          <div>
-            <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-1">
-              Overview
-            </h3>
-            <p className="text-sm text-white/70 leading-relaxed line-clamp-4">
-              {selectedMovie.overview}
+          {/* Title and year */}
+          <div style={{
+            position: 'absolute',
+            bottom: 16,
+            left: 20,
+            right: 20,
+          }}>
+            <h2 style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: '#ffffff',
+              margin: '0 0 4px 0',
+              lineHeight: 1.2,
+              textShadow: '0 2px 8px rgba(0, 0, 0, 0.5)',
+            }}>
+              {selectedMovie.title}
+            </h2>
+            <p style={{
+              fontSize: 14,
+              color: 'rgba(255, 255, 255, 0.6)',
+              margin: 0,
+            }}>
+              {selectedMovie.year}
             </p>
           </div>
-        )}
+        </div>
 
-        {/* Connection stats */}
-        <div className="pt-3 border-t border-white/10">
-          <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">
-            Connections ({connectionCount} movies)
-          </h3>
-          <div className="grid grid-cols-4 gap-2">
-            <StatBadge label="Actor" count={connectionBreakdown.actor} color="#f97316" />
-            <StatBadge label="Dir" count={connectionBreakdown.director} color="#3b82f6" />
-            <StatBadge label="Genre" count={connectionBreakdown.genre} color="#22c55e" />
-            <StatBadge label="Plot" count={connectionBreakdown.plot} color="#a855f7" />
+        {/* Content */}
+        <div style={{
+          padding: 20,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 20,
+        }}>
+          {/* Rating */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '12px 16px',
+            backgroundColor: 'rgba(251, 191, 36, 0.1)',
+            borderRadius: 12,
+            border: '1px solid rgba(251, 191, 36, 0.2)',
+          }}>
+            <svg width="24" height="24" fill="#fbbf24" viewBox="0 0 20 20">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+            <div>
+              <span style={{
+                fontSize: 24,
+                fontWeight: 700,
+                color: '#fbbf24',
+              }}>
+                {selectedMovie.rating.toFixed(1)}
+              </span>
+              <span style={{
+                fontSize: 14,
+                color: 'rgba(255, 255, 255, 0.4)',
+                marginLeft: 4,
+              }}>
+                / 10
+              </span>
+            </div>
           </div>
+
+          {/* Genres */}
+          <div>
+            <h3 style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'rgba(255, 255, 255, 0.4)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              margin: '0 0 10px 0',
+            }}>
+              Genres
+            </h3>
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}>
+              {selectedMovie.genres.map(genre => (
+                <span
+                  key={genre}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    borderRadius: 20,
+                    backgroundColor: `${GENRE_COLORS[genre] || GENRE_COLORS.default}20`,
+                    color: GENRE_COLORS[genre] || GENRE_COLORS.default,
+                    border: `1px solid ${GENRE_COLORS[genre] || GENRE_COLORS.default}30`,
+                  }}
+                >
+                  {genre}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Directors */}
+          {selectedMovie.directors.length > 0 && (
+            <div>
+              <h3 style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'rgba(255, 255, 255, 0.4)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                margin: '0 0 6px 0',
+              }}>
+                Director{selectedMovie.directors.length > 1 ? 's' : ''}
+              </h3>
+              <p style={{
+                fontSize: 14,
+                color: 'rgba(255, 255, 255, 0.85)',
+                margin: 0,
+                lineHeight: 1.5,
+              }}>
+                {selectedMovie.directors.join(', ')}
+              </p>
+            </div>
+          )}
+
+          {/* Cast */}
+          {selectedMovie.leadActors.length > 0 && (
+            <div>
+              <h3 style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'rgba(255, 255, 255, 0.4)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                margin: '0 0 6px 0',
+              }}>
+                Cast
+              </h3>
+              <p style={{
+                fontSize: 14,
+                color: 'rgba(255, 255, 255, 0.85)',
+                margin: 0,
+                lineHeight: 1.5,
+              }}>
+                {selectedMovie.leadActors.slice(0, 4).join(', ')}
+              </p>
+            </div>
+          )}
+
+          {/* Overview */}
+          {selectedMovie.overview && (
+            <div>
+              <h3 style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'rgba(255, 255, 255, 0.4)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                margin: '0 0 8px 0',
+              }}>
+                Overview
+              </h3>
+              <p style={{
+                fontSize: 13,
+                color: 'rgba(255, 255, 255, 0.7)',
+                margin: 0,
+                lineHeight: 1.7,
+              }}>
+                {selectedMovie.overview}
+              </p>
+            </div>
+          )}
+
+          {/* Connection stats */}
+          <div style={{
+            padding: 16,
+            backgroundColor: 'rgba(255, 255, 255, 0.03)',
+            borderRadius: 12,
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+          }}>
+            <h3 style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'rgba(255, 255, 255, 0.4)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              margin: '0 0 12px 0',
+            }}>
+              Connections ({connectionCount} movies)
+            </h3>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 8,
+            }}>
+              <StatBadge label="Actor" count={connectionBreakdown.actor} color={CONNECTION_COLORS.same_actor} icon="🎭" />
+              <StatBadge label="Director" count={connectionBreakdown.director} color={CONNECTION_COLORS.same_director} icon="🎬" />
+              <StatBadge label="Genre" count={connectionBreakdown.genre} color={CONNECTION_COLORS.same_genre} icon="🏷️" />
+              <StatBadge label="Plot" count={connectionBreakdown.plot} color={CONNECTION_COLORS.similar_plot} icon="📖" />
+            </div>
+          </div>
+
+          {/* Related Movies */}
+          {relatedMovies.length > 0 && (
+            <div>
+              <h3 style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'rgba(255, 255, 255, 0.4)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                margin: '0 0 12px 0',
+              }}>
+                Related Movies
+              </h3>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}>
+                {relatedMovies.map(({ movie, connectionTypes }) => (
+                  <div
+                    key={movie.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      console.log('Related movie clicked:', movie.title);
+                      e.stopPropagation();
+                      handleRelatedMovieClick(movie);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        handleRelatedMovieClick(movie);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '10px 12px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                      borderRadius: 10,
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      cursor: 'pointer',
+                      transition: 'all 200ms ease',
+                      width: '100%',
+                      position: 'relative',
+                      zIndex: 20,
+                      pointerEvents: 'auto',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                      e.currentTarget.style.borderColor = 'rgba(0, 212, 255, 0.3)';
+                      e.currentTarget.style.transform = 'translateX(4px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
+                      e.currentTarget.style.transform = 'translateX(0)';
+                    }}
+                  >
+                    {/* Poster thumbnail */}
+                    <div style={{
+                      width: 40,
+                      height: 56,
+                      borderRadius: 6,
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    }}>
+                      {movie.poster ? (
+                        <img
+                          src={movie.poster}
+                          alt={movie.title}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 20,
+                        }}>
+                          🎬
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Movie info */}
+                    <div style={{
+                      flex: 1,
+                      minWidth: 0,
+                    }}>
+                      <div style={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: 'rgba(255, 255, 255, 0.9)',
+                        marginBottom: 2,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        {movie.title}
+                      </div>
+                      <div style={{
+                        fontSize: 12,
+                        color: 'rgba(255, 255, 255, 0.5)',
+                        marginBottom: 6,
+                      }}>
+                        {movie.year} • ⭐ {movie.rating.toFixed(1)}
+                      </div>
+                      
+                      {/* Connection type badges */}
+                      <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 4,
+                      }}>
+                        {connectionTypes.map(type => (
+                          <span
+                            key={type}
+                            style={{
+                              padding: '2px 6px',
+                              fontSize: 9,
+                              fontWeight: 500,
+                              borderRadius: 4,
+                              backgroundColor: `${CONNECTION_COLORS[type]}20`,
+                              color: CONNECTION_COLORS[type],
+                              textTransform: 'capitalize',
+                            }}
+                          >
+                            {type.replace('same_', '').replace('similar_', '')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Arrow icon */}
+                    <svg
+                      width={16}
+                      height={16}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="rgba(255, 255, 255, 0.3)"
+                      style={{
+                        flexShrink: 0,
+                      }}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-// Small stat badge component
-const StatBadge = ({ label, count, color }: { label: string; count: number; color: string }) => (
-  <div className="text-center p-1.5 rounded bg-white/5">
-    <div className="text-xs font-bold" style={{ color }}>{count}</div>
-    <div className="text-[10px] text-white/40">{label}</div>
+// Stat badge component
+const StatBadge = ({ label, count, color, icon }: { label: string; count: number; color: string; icon: string }) => (
+  <div style={{
+    textAlign: 'center',
+    padding: '10px 4px',
+    borderRadius: 10,
+    backgroundColor: `${color}15`,
+    border: `1px solid ${color}25`,
+  }}>
+    <div style={{ fontSize: 14, marginBottom: 2 }}>{icon}</div>
+    <div style={{
+      fontSize: 16,
+      fontWeight: 700,
+      color: color,
+    }}>
+      {count}
+    </div>
+    <div style={{
+      fontSize: 10,
+      color: 'rgba(255, 255, 255, 0.4)',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+    }}>
+      {label}
+    </div>
   </div>
 );

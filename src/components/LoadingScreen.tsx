@@ -4,50 +4,122 @@ interface LoadingScreenProps {
 }
 
 export const LoadingScreen = ({ message = 'Loading...', progress }: LoadingScreenProps) => {
+  console.log('LoadingScreen: Rendering with message:', message);
   const progressPercent = progress
     ? Math.round((progress.loaded / progress.total) * 100)
     : null;
 
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0a0f] z-50">
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#0a0a0f',
+      zIndex: 50
+    }}>
       {/* Animated loader */}
-      <div className="relative w-20 h-20 mb-8">
+      <div style={{ position: 'relative', width: 80, height: 80, marginBottom: 32 }}>
         {/* Outer ring */}
-        <div className="absolute inset-0 border-2 border-[#00d4ff]/20 rounded-full" />
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          border: '2px solid rgba(0, 212, 255, 0.2)',
+          borderRadius: '50%'
+        }} />
 
         {/* Spinning ring */}
-        <div className="absolute inset-0 border-2 border-transparent border-t-[#00d4ff] rounded-full animate-spin" />
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          border: '2px solid transparent',
+          borderTopColor: '#00d4ff',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
 
         {/* Inner pulse */}
-        <div className="absolute inset-3 bg-[#00d4ff]/10 rounded-full animate-pulse" />
+        <div style={{
+          position: 'absolute',
+          top: 12,
+          left: 12,
+          right: 12,
+          bottom: 12,
+          backgroundColor: 'rgba(0, 212, 255, 0.1)',
+          borderRadius: '50%',
+          animation: 'pulse 2s ease-in-out infinite'
+        }} />
 
         {/* Center dot */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-3 h-3 bg-[#00d4ff] rounded-full" />
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            width: 12,
+            height: 12,
+            backgroundColor: '#00d4ff',
+            borderRadius: '50%'
+          }} />
         </div>
       </div>
 
       {/* Message */}
-      <p className="text-white/80 text-lg font-medium mb-2">{message}</p>
+      <p style={{
+        fontSize: 18,
+        fontWeight: 500,
+        marginBottom: 8,
+        color: 'rgba(255, 255, 255, 0.8)'
+      }}>
+        {message}
+      </p>
 
       {/* Progress bar */}
       {progressPercent !== null && progress && (
-        <div className="w-64 mt-4">
-          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[#00d4ff] transition-all duration-300 ease-out"
-              style={{ width: `${progressPercent}%` }}
-            />
+        <div style={{ width: 256, marginTop: 16 }}>
+          <div style={{
+            height: 4,
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: 2,
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${progressPercent}%`,
+              backgroundColor: '#00d4ff',
+              transition: 'width 300ms ease-out'
+            }} />
           </div>
-          <p className="text-center text-white/40 text-sm mt-2">
+          <p style={{
+            textAlign: 'center',
+            fontSize: 14,
+            marginTop: 8,
+            color: 'rgba(255, 255, 255, 0.4)'
+          }}>
             {progress.loaded} / {progress.total} movies
           </p>
         </div>
       )}
 
       {/* Hint */}
-      <p className="text-white/30 text-sm mt-8">
-        First load may take a minute to fetch movie data
+      <p style={{
+        fontSize: 14,
+        marginTop: 32,
+        color: 'rgba(255, 255, 255, 0.3)'
+      }}>
+        First load may take 3-5 minutes to fetch 1000 movies
+      </p>
+      <p style={{
+        fontSize: 12,
+        marginTop: 8,
+        color: 'rgba(255, 255, 255, 0.2)'
+      }}>
+        Data will be cached locally for 7 days
       </p>
     </div>
   );
@@ -55,8 +127,18 @@ export const LoadingScreen = ({ message = 'Loading...', progress }: LoadingScree
 
 export const ErrorScreen = ({ message, onRetry }: { message: string; onRetry?: () => void }) => {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0a0f] z-50 p-4">
-      <div className="w-16 h-16 mb-6 text-red-500/50">
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#0a0a0f',
+      zIndex: 50,
+      padding: 16
+    }}>
+      <div style={{ width: 64, height: 64, marginBottom: 24, color: 'rgba(239, 68, 68, 0.5)' }}>
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             strokeLinecap="round"
@@ -67,25 +149,57 @@ export const ErrorScreen = ({ message, onRetry }: { message: string; onRetry?: (
         </svg>
       </div>
 
-      <h2 className="text-white/90 text-xl font-semibold mb-2 text-center">
+      <h2 style={{
+        fontSize: 20,
+        fontWeight: 600,
+        marginBottom: 8,
+        textAlign: 'center',
+        color: 'rgba(255, 255, 255, 0.9)'
+      }}>
         Something went wrong
       </h2>
 
-      <p className="text-white/50 text-sm text-center max-w-md mb-6">
+      <p style={{
+        fontSize: 14,
+        textAlign: 'center',
+        maxWidth: 400,
+        marginBottom: 24,
+        color: 'rgba(255, 255, 255, 0.5)'
+      }}>
         {message}
       </p>
 
       {onRetry && (
         <button
           onClick={onRetry}
-          className="px-6 py-2.5 bg-[#00d4ff]/20 hover:bg-[#00d4ff]/30 text-[#00d4ff] rounded-lg font-medium transition-colors"
+          style={{
+            padding: '10px 24px',
+            backgroundColor: 'rgba(0, 212, 255, 0.2)',
+            color: '#00d4ff',
+            borderRadius: 8,
+            fontWeight: 500,
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'background-color 150ms'
+          }}
+          onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 212, 255, 0.3)'}
+          onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 212, 255, 0.2)'}
         >
           Try Again
         </button>
       )}
 
-      <p className="text-white/30 text-xs mt-8 text-center">
-        Make sure you have set <code className="bg-white/5 px-1 rounded">VITE_TMDB_API_KEY</code> in your .env file
+      <p style={{
+        fontSize: 12,
+        marginTop: 32,
+        textAlign: 'center',
+        color: 'rgba(255, 255, 255, 0.3)'
+      }}>
+        Make sure you have set <code style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+          padding: '2px 4px',
+          borderRadius: 2
+        }}>VITE_TMDB_API_KEY</code> in your .env file
       </p>
     </div>
   );
