@@ -3,28 +3,43 @@ import { useGraphStore } from '../stores/graphStore';
 import { useGraphFilters } from '../hooks/useGraphFilters';
 import { GENRE_COLORS, CONNECTION_COLORS, type Movie, type ConnectionType } from '../types';
 
+const CONNECTION_META: Record<ConnectionType, { label: string; icon: string; description: string }> = {
+  same_actor: { label: 'Actor', icon: '🎭', description: 'Shared cast members' },
+  same_director: { label: 'Director', icon: '🎬', description: 'Same director' },
+  same_genre: { label: 'Genre', icon: '🏷️', description: 'Shared genres' },
+  similar_plot: { label: 'Plot', icon: '📖', description: 'Similar storyline' },
+};
+
 export const MovieDetailsPanel = () => {
   const { selectedMovie, selectMovie, nodes } = useGraphStore();
   const { connectedMovieIds, connectedEdges } = useGraphFilters();
 
-  // Get related movies with connection info - MUST be before any conditional returns
-  const relatedMovies = useMemo(() => {
-    console.log('Computing relatedMovies:', { 
+  // Group related movies by connection type
+  const groupedConnections = useMemo<Record<ConnectionType, { movie: Movie; strength: number; allTypes: ConnectionType[] }[]>>(() => {
+    console.log('Computing groupedConnections:', { 
       selectedMovieId: selectedMovie?.id, 
       connectedCount: connectedMovieIds.size,
       nodesCount: nodes.length 
     });
     
-    if (!selectedMovie || connectedMovieIds.size === 0) return [];
+    if (!selectedMovie || connectedMovieIds.size === 0) {
+      return { same_actor: [], same_director: [], same_genre: [], similar_plot: [] };
+    }
     
     const movieMap = new Map(nodes.map(n => [n.id, n]));
     
-    return Array.from(connectedMovieIds).map(movieId => {
+    // Initialize groups
+    const groups: Record<ConnectionType, { movie: Movie; strength: number; allTypes: ConnectionType[] }[]> = {
+      same_actor: [],
+      same_director: [],
+      same_genre: [],
+      similar_plot: [],
+    };
+    
+    // For each connected movie, find all its connection types and add to appropriate groups
+    Array.from(connectedMovieIds).forEach(movieId => {
       const movie = movieMap.get(movieId);
-      if (!movie) {
-        console.warn('Movie not found for id:', movieId);
-        return null;
-      }
+      if (!movie) return;
       
       // Find all connection types to this movie
       const connectionTypes: ConnectionType[] = [];
@@ -38,45 +53,41 @@ export const MovieDetailsPanel = () => {
       
       // Remove duplicates and get unique connection types
       const uniqueTypes = Array.from(new Set(connectionTypes));
+      const strength = uniqueTypes.length;
       
-      return {
-        movie,
-        connectionTypes: uniqueTypes,
-        strength: uniqueTypes.length,
-      };
-    }).filter((item): item is NonNullable<typeof item> => item !== null)
-      .sort((a, b) => b.strength - a.strength);
+      // Add movie to each relevant group
+      uniqueTypes.forEach(type => {
+        groups[type].push({ movie, strength, allTypes: uniqueTypes });
+      });
+    });
+    
+    // Sort each group by strength (descending) then by rating
+    (Object.keys(groups) as ConnectionType[]).forEach(type => {
+      groups[type].sort((a, b) => {
+        if (b.strength !== a.strength) return b.strength - a.strength;
+        return b.movie.rating - a.movie.rating;
+      });
+    });
+    
+    return groups;
   }, [selectedMovie, connectedMovieIds, connectedEdges, nodes]);
+
+  // Calculate total unique connections
+  const totalConnections = connectedMovieIds.size;
+  
+  // Calculate counts per type
+  const connectionCounts = useMemo(() => ({
+    same_actor: groupedConnections.same_actor.length,
+    same_director: groupedConnections.same_director.length,
+    same_genre: groupedConnections.same_genre.length,
+    similar_plot: groupedConnections.similar_plot.length,
+  }), [groupedConnections]);
 
   // Handle clicking on a related movie
   const handleRelatedMovieClick = useCallback((movie: Movie) => {
     console.log('Clicked related movie:', movie.id, movie.title);
     selectMovie(movie);
   }, [selectMovie]);
-
-  // Count connections
-  const connectionCount = connectedMovieIds.size;
-
-  // Get connection breakdown
-  const connectionBreakdown = useMemo(() => {
-    const breakdown = {
-      actor: 0,
-      director: 0,
-      genre: 0,
-      plot: 0,
-    };
-
-    connectedEdges.forEach(edge => {
-      edge.types.forEach(type => {
-        if (type === 'same_actor') breakdown.actor++;
-        if (type === 'same_director') breakdown.director++;
-        if (type === 'same_genre') breakdown.genre++;
-        if (type === 'similar_plot') breakdown.plot++;
-      });
-    });
-
-    return breakdown;
-  }, [connectedEdges]);
 
   // NOW we can do conditional rendering after all hooks are called
   if (!selectedMovie) {
@@ -137,6 +148,9 @@ export const MovieDetailsPanel = () => {
     );
   }
 
+  // Order of connection types to display
+  const typeOrder: ConnectionType[] = ['same_actor', 'same_director', 'same_genre', 'similar_plot'];
+
   return (
     <div style={{
       position: 'absolute',
@@ -147,7 +161,7 @@ export const MovieDetailsPanel = () => {
       maxHeight: 'calc(100vh - 160px)',
     }}>
       <div style={{
-        backgroundColor: 'rgba(13, 13, 21, 0.9)',
+        backgroundColor: 'rgba(13, 13, 21, 0.95)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         borderRadius: 20,
@@ -403,192 +417,248 @@ export const MovieDetailsPanel = () => {
             </div>
           )}
 
-          {/* Connection stats */}
-          <div style={{
-            padding: 16,
-            backgroundColor: 'rgba(255, 255, 255, 0.03)',
-            borderRadius: 12,
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-          }}>
-            <h3 style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: 'rgba(255, 255, 255, 0.4)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              margin: '0 0 12px 0',
-            }}>
-              Connections ({connectionCount} movies)
-            </h3>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: 8,
-            }}>
-              <StatBadge label="Actor" count={connectionBreakdown.actor} color={CONNECTION_COLORS.same_actor} icon="🎭" />
-              <StatBadge label="Director" count={connectionBreakdown.director} color={CONNECTION_COLORS.same_director} icon="🎬" />
-              <StatBadge label="Genre" count={connectionBreakdown.genre} color={CONNECTION_COLORS.same_genre} icon="🏷️" />
-              <StatBadge label="Plot" count={connectionBreakdown.plot} color={CONNECTION_COLORS.similar_plot} icon="📖" />
-            </div>
-          </div>
-
-          {/* Related Movies */}
-          {relatedMovies.length > 0 && (
+          {/* Connections - Combined header and grouped movies */}
+          {totalConnections > 0 && (
             <div>
-              <h3 style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: 'rgba(255, 255, 255, 0.4)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                margin: '0 0 12px 0',
+              {/* Section header with total */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 16,
               }}>
-                Related Movies
-              </h3>
+                <h3 style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: 'rgba(255, 255, 255, 0.4)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  margin: 0,
+                }}>
+                  Connections
+                </h3>
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  padding: '4px 10px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  borderRadius: 12,
+                }}>
+                  {totalConnections} movies
+                </span>
+              </div>
+
+              {/* Grouped by connection type */}
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 8,
+                gap: 20,
               }}>
-                {relatedMovies.map(({ movie, connectionTypes }) => (
-                  <div
-                    key={movie.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      console.log('Related movie clicked:', movie.title);
-                      e.stopPropagation();
-                      handleRelatedMovieClick(movie);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.stopPropagation();
-                        handleRelatedMovieClick(movie);
-                      }
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '10px 12px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                      borderRadius: 10,
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                      cursor: 'pointer',
-                      transition: 'all 200ms ease',
-                      width: '100%',
-                      position: 'relative',
-                      zIndex: 20,
-                      pointerEvents: 'auto',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                      e.currentTarget.style.borderColor = 'rgba(0, 212, 255, 0.3)';
-                      e.currentTarget.style.transform = 'translateX(4px)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
-                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
-                      e.currentTarget.style.transform = 'translateX(0)';
-                    }}
-                  >
-                    {/* Poster thumbnail */}
-                    <div style={{
-                      width: 40,
-                      height: 56,
-                      borderRadius: 6,
-                      overflow: 'hidden',
-                      flexShrink: 0,
-                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    }}>
-                      {movie.poster ? (
-                        <img
-                          src={movie.poster}
-                          alt={movie.title}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                          }}
-                        />
-                      ) : (
-                        <div style={{
-                          width: '100%',
-                          height: '100%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 20,
-                        }}>
-                          🎬
-                        </div>
-                      )}
-                    </div>
+                {typeOrder.map((type) => {
+                  const movies = groupedConnections[type];
+                  const count = connectionCounts[type];
+                  if (count === 0) return null;
 
-                    {/* Movie info */}
-                    <div style={{
-                      flex: 1,
-                      minWidth: 0,
-                    }}>
-                      <div style={{
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: 'rgba(255, 255, 255, 0.9)',
-                        marginBottom: 2,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}>
-                        {movie.title}
-                      </div>
-                      <div style={{
-                        fontSize: 12,
-                        color: 'rgba(255, 255, 255, 0.5)',
-                        marginBottom: 6,
-                      }}>
-                        {movie.year} • ⭐ {movie.rating.toFixed(1)}
-                      </div>
-                      
-                      {/* Connection type badges */}
+                  const meta = CONNECTION_META[type];
+                  const color = CONNECTION_COLORS[type];
+
+                  return (
+                    <div key={type}>
+                      {/* Connection type header */}
                       <div style={{
                         display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: 4,
+                        alignItems: 'center',
+                        gap: 8,
+                        marginBottom: 10,
+                        padding: '8px 12px',
+                        backgroundColor: `${color}15`,
+                        borderRadius: 10,
+                        border: `1px solid ${color}25`,
                       }}>
-                        {connectionTypes.map(type => (
-                          <span
-                            key={type}
+                        <span style={{ fontSize: 14 }}>{meta.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: color,
+                            textTransform: 'capitalize',
+                          }}>
+                            {meta.label}
+                          </div>
+                          <div style={{
+                            fontSize: 10,
+                            color: 'rgba(255, 255, 255, 0.4)',
+                          }}>
+                            {meta.description}
+                          </div>
+                        </div>
+                        <span style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: color,
+                          padding: '2px 8px',
+                          backgroundColor: `${color}20`,
+                          borderRadius: 10,
+                        }}>
+                          {count}
+                        </span>
+                      </div>
+
+                      {/* Movies for this connection type */}
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                      }}>
+                        {movies.map((item) => {
+                  const { movie, allTypes } = item;
+                  return (
+                          <div
+                            key={`${type}-${movie.id}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => {
+                              console.log('Related movie clicked:', movie.title);
+                              e.stopPropagation();
+                              handleRelatedMovieClick(movie);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.stopPropagation();
+                                handleRelatedMovieClick(movie);
+                              }
+                            }}
                             style={{
-                              padding: '2px 6px',
-                              fontSize: 9,
-                              fontWeight: 500,
-                              borderRadius: 4,
-                              backgroundColor: `${CONNECTION_COLORS[type]}20`,
-                              color: CONNECTION_COLORS[type],
-                              textTransform: 'capitalize',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 12,
+                              padding: '10px 12px',
+                              backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                              borderRadius: 10,
+                              border: '1px solid rgba(255, 255, 255, 0.06)',
+                              cursor: 'pointer',
+                              transition: 'all 200ms ease',
+                              width: '100%',
+                              position: 'relative',
+                              zIndex: 20,
+                              pointerEvents: 'auto',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                              e.currentTarget.style.borderColor = `${color}50`;
+                              e.currentTarget.style.transform = 'translateX(4px)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
+                              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)';
+                              e.currentTarget.style.transform = 'translateX(0)';
                             }}
                           >
-                            {type.replace('same_', '').replace('similar_', '')}
-                          </span>
-                        ))}
+                            {/* Poster thumbnail */}
+                            <div style={{
+                              width: 36,
+                              height: 50,
+                              borderRadius: 5,
+                              overflow: 'hidden',
+                              flexShrink: 0,
+                              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                            }}>
+                              {movie.poster ? (
+                                <img
+                                  src={movie.poster}
+                                  alt={movie.title}
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                  }}
+                                />
+                              ) : (
+                                <div style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 16,
+                                }}>
+                                  🎬
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Movie info */}
+                            <div style={{
+                              flex: 1,
+                              minWidth: 0,
+                            }}>
+                              <div style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: 'rgba(255, 255, 255, 0.9)',
+                                marginBottom: 2,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}>
+                                {movie.title}
+                              </div>
+                              <div style={{
+                                fontSize: 11,
+                                color: 'rgba(255, 255, 255, 0.5)',
+                              }}>
+                                {movie.year} • ⭐ {movie.rating.toFixed(1)}
+                              </div>
+                              
+                              {/* Show other connection types for this movie */}
+                              {allTypes.length > 1 && (
+                                <div style={{
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
+                                  gap: 3,
+                                  marginTop: 5,
+                                }}>
+                                  {allTypes.filter((t: ConnectionType) => t !== type).map((otherType: ConnectionType) => (
+                                    <span
+                                      key={otherType}
+                                      style={{
+                                        fontSize: 8,
+                                        padding: '1px 4px',
+                                        borderRadius: 3,
+                                        backgroundColor: `${CONNECTION_COLORS[otherType]}15`,
+                                        color: CONNECTION_COLORS[otherType],
+                                        textTransform: 'capitalize',
+                                      }}
+                                    >
+                                      {CONNECTION_META[otherType].label}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Arrow icon */}
+                            <svg
+                              width={14}
+                              height={14}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke={color}
+                              style={{
+                                flexShrink: 0,
+                                opacity: 0.6,
+                              }}
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        );
+                      })}
                       </div>
                     </div>
-
-                    {/* Arrow icon */}
-                    <svg
-                      width={16}
-                      height={16}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="rgba(255, 255, 255, 0.3)"
-                      style={{
-                        flexShrink: 0,
-                      }}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -597,31 +667,3 @@ export const MovieDetailsPanel = () => {
     </div>
   );
 };
-
-// Stat badge component
-const StatBadge = ({ label, count, color, icon }: { label: string; count: number; color: string; icon: string }) => (
-  <div style={{
-    textAlign: 'center',
-    padding: '10px 4px',
-    borderRadius: 10,
-    backgroundColor: `${color}15`,
-    border: `1px solid ${color}25`,
-  }}>
-    <div style={{ fontSize: 14, marginBottom: 2 }}>{icon}</div>
-    <div style={{
-      fontSize: 16,
-      fontWeight: 700,
-      color: color,
-    }}>
-      {count}
-    </div>
-    <div style={{
-      fontSize: 10,
-      color: 'rgba(255, 255, 255, 0.4)',
-      textTransform: 'uppercase',
-      letterSpacing: '0.5px',
-    }}>
-      {label}
-    </div>
-  </div>
-);
