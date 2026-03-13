@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { useGraphStore } from '../stores/graphStore';
 import { useGraphFilters } from '../hooks/useGraphFilters';
-import { GENRE_COLORS, CONNECTION_COLORS, type Movie, type ConnectionType } from '../types';
+import { GENRE_COLORS, CONNECTION_COLORS, type Movie, type ConnectionType, type MovieNode } from '../types';
 
 const CONNECTION_META: Record<ConnectionType, { label: string; icon: string; description: string }> = {
   same_actor: { label: 'Actor', icon: '🎭', description: 'Shared cast members' },
@@ -44,8 +44,12 @@ export const MovieDetailsPanel = () => {
       // Find all connection types to this movie
       const connectionTypes: ConnectionType[] = [];
       connectedEdges.forEach(edge => {
-        const otherId = edge.source === selectedMovie.id ? edge.target : 
-                       edge.target === selectedMovie.id ? edge.source : null;
+        // Handle both raw IDs (number) and D3-processed references (object with id)
+        const sourceId = typeof edge.source === 'number' ? edge.source : (edge.source as MovieNode).id;
+        const targetId = typeof edge.target === 'number' ? edge.target : (edge.target as MovieNode).id;
+        
+        const otherId = sourceId === selectedMovie.id ? targetId : 
+                       targetId === selectedMovie.id ? sourceId : null;
         if (otherId === movieId) {
           connectionTypes.push(...edge.types);
         }
