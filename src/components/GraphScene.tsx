@@ -1,5 +1,6 @@
 import { MovieGraph } from './MovieGraph';
 import { FilterPanel } from './FilterPanel';
+import { GenreLegend } from './GenreLegend';
 import { MovieDetailsPanel } from './MovieDetailsPanel';
 import { SearchBar } from './SearchBar';
 import { LoadingScreen, ErrorScreen } from './LoadingScreen';
@@ -48,6 +49,7 @@ export const GraphScene = () => {
 
       {/* UI overlays */}
       <FilterPanel />
+      <GenreLegend />
       <SearchBar />
       <MovieDetailsPanel />
 
