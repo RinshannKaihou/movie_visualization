@@ -7,6 +7,7 @@ import { getEdgeColor, getNodeColor, getNodeSize } from '../services/graphBuilde
 import { useGraphFilters } from '../hooks/useGraphFilters';
 import { useGraphStore } from '../stores/graphStore';
 import { useGraphMode } from '../hooks/useGraphMode';
+import { NodeTooltip } from './NodeTooltip';
 import type { MovieEdge, MovieNode } from '../types';
 
 export const MovieGraph = () => {
@@ -84,7 +85,7 @@ export const MovieGraph = () => {
           nodeId="id"
           linkSource="source"
           linkTarget="target"
-          nodeLabel={(node: MovieNode) => `${node.title} (${node.year})`}
+          nodeLabel=""
           nodeColor={getNodeColorMemo}
           nodeVal={getNodeVal}
           linkColor={getLinkColor}
@@ -108,7 +109,7 @@ export const MovieGraph = () => {
           nodeId="id"
           linkSource="source"
           linkTarget="target"
-          nodeLabel={(node: MovieNode) => `${node.title} (${node.year})`}
+          nodeLabel=""
           nodeColor={getNodeColorMemo}
           nodeVal={getNodeVal}
           linkColor={getLinkColor}
@@ -123,6 +124,9 @@ export const MovieGraph = () => {
           d3VelocityDecay={0.4}
         />
       )}
+      
+      {/* Custom tooltip overlay */}
+      <NodeTooltip node={hoveredNode} />
 
       <div style={{
         position: 'absolute',
