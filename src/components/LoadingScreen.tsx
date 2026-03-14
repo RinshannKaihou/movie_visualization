@@ -1,9 +1,10 @@
 interface LoadingScreenProps {
   message?: string;
   progress?: { loaded: number; total: number };
+  hint?: string;
 }
 
-export const LoadingScreen = ({ message = 'Loading...', progress }: LoadingScreenProps) => {
+export const LoadingScreen = ({ message = 'Loading...', progress, hint }: LoadingScreenProps) => {
   console.log('LoadingScreen: Rendering with message:', message);
   const progressPercent = progress
     ? Math.round((progress.loaded / progress.total) * 100)
@@ -112,15 +113,17 @@ export const LoadingScreen = ({ message = 'Loading...', progress }: LoadingScree
         marginTop: 32,
         color: 'rgba(255, 255, 255, 0.3)'
       }}>
-        First load may take 3-5 minutes to fetch 1000 movies
+        {hint || 'First load may take 3-5 minutes to fetch 1000 movies'}
       </p>
-      <p style={{
-        fontSize: 12,
-        marginTop: 8,
-        color: 'rgba(255, 255, 255, 0.2)'
-      }}>
-        Data will be cached locally for 7 days
-      </p>
+      {!hint && (
+        <p style={{
+          fontSize: 12,
+          marginTop: 8,
+          color: 'rgba(255, 255, 255, 0.2)'
+        }}>
+          Data will be cached locally for 7 days
+        </p>
+      )}
     </div>
   );
 };

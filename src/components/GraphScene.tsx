@@ -9,12 +9,18 @@ import { useMovieData } from '../hooks/useMovieData';
 import { useGraphMode } from '../hooks/useGraphMode';
 
 export const GraphScene = () => {
-  const { isLoading, error, refreshData, progress } = useMovieData();
+  const { isLoading, error, refreshData, progress, usingStaticData } = useMovieData();
   const { is3DMode, isMobile, hasWebGL } = useGraphMode();
 
   // Show loading screen
   if (isLoading) {
-    return <LoadingScreen message="Building movie network..." progress={progress} />;
+    return (
+      <LoadingScreen 
+        message={usingStaticData ? "Loading movie data..." : "Building movie network..."} 
+        progress={progress}
+        hint={usingStaticData ? "Loading pre-built dataset" : undefined}
+      />
+    );
   }
 
   // Show error screen
