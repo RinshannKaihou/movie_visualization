@@ -1,4 +1,4 @@
-import type { Movie, GraphData } from '../types';
+import type { Movie, MovieNode, GraphData } from '../types';
 
 interface ExportedData {
   movies: Movie[];
@@ -31,16 +31,36 @@ export const loadStaticData = async (): Promise<{
         if (response.ok) {
           const data: ExportedData = await response.json();
           
+          // Clean up nodes: remove any stale position/velocity data to ensure fresh simulation
+          const cleanNodes = data.graphData.nodes.map(node => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { x, y, z, vx, vy, vz, ...cleanNode } = node;
+            return cleanNode as MovieNode;
+          });
+          
+          // Ensure edges use numeric IDs (in case they were mutated to objects)
+          const cleanEdges = data.graphData.links.map(edge => ({
+            source: typeof edge.source === 'number' ? edge.source : (edge.source as { id: number }).id,
+            target: typeof edge.target === 'number' ? edge.target : (edge.target as { id: number }).id,
+            types: edge.types,
+            strength: edge.strength,
+          }));
+          
+          const graphData: GraphData = {
+            nodes: cleanNodes,
+            links: cleanEdges,
+          };
+          
           console.log('Loaded static data:', {
             movies: data.movies.length,
-            nodes: data.graphData.nodes.length,
-            links: data.graphData.links.length,
+            nodes: graphData.nodes.length,
+            links: graphData.links.length,
             exportedAt: new Date(data.timestamp).toLocaleString(),
           });
           
           return {
             movies: data.movies,
-            graphData: data.graphData,
+            graphData,
           };
         }
       } catch (e) {

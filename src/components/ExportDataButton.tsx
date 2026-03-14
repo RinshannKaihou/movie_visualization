@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useGraphStore } from '../stores/graphStore';
+import type { MovieNode } from '../types';
 
 export const ExportDataButton = () => {
   const [isExporting, setIsExporting] = useState(false);
@@ -16,11 +17,28 @@ export const ExportDataButton = () => {
     setIsExporting(true);
 
     try {
+      // Clean up edges to ensure they use numeric IDs, not object references
+      // D3 may have mutated the edges to use object references
+      const cleanEdges = edges.map(edge => ({
+        source: typeof edge.source === 'number' ? edge.source : (edge.source as { id: number }).id,
+        target: typeof edge.target === 'number' ? edge.target : (edge.target as { id: number }).id,
+        types: edge.types,
+        strength: edge.strength,
+      }));
+
+      // Clean up nodes to remove simulation state (position, velocity)
+      // This ensures the simulation starts fresh when data is loaded
+      const cleanNodes = nodes.map(node => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { x, y, z, vx, vy, vz, ...cleanNode } = node;
+        return cleanNode as MovieNode;
+      });
+
       const exportData = {
         movies,
         graphData: {
-          nodes,
-          links: edges,
+          nodes: cleanNodes,
+          links: cleanEdges,
         },
         timestamp: Date.now(),
         version: 3,
