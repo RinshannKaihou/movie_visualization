@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useGraphStore } from '../stores/graphStore';
 import { fetchMoviesWithDetails } from '../services/tmdb';
+import { loadStaticData } from '../services/staticData';
 import { buildGraphData } from '../services/graphBuilder';
 import { saveGraphData, loadGraphData, clearCache } from '../utils/cache';
 
@@ -19,16 +20,34 @@ export const useMovieData = () => {
   
   // Track loading progress for 1000 movies
   const [progress, setProgress] = useState<{ loaded: number; total: number } | undefined>();
+  
+  // Track if we're using static data
+  const [usingStaticData, setUsingStaticData] = useState(false);
 
-  // Load data from cache or fetch from API
+  // Load data from static file, cache, or fetch from API
   const loadData = useCallback(async (forceRefresh: boolean = false) => {
     console.log('useMovieData: loadData called, forceRefresh:', forceRefresh);
     setLoading(true);
     setError(null);
     setProgress(undefined);
+    setUsingStaticData(false);
 
     try {
-      // Try to load from cache first
+      // Priority 1: Try static JSON file (for deployed version without API key)
+      if (!forceRefresh) {
+        console.log('useMovieData: Checking for static data...');
+        const staticData = await loadStaticData();
+        if (staticData) {
+          console.log('useMovieData: Using static data');
+          setMovies(staticData.movies);
+          setGraphData(staticData.graphData);
+          setUsingStaticData(true);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Priority 2: Try to load from IndexedDB cache
       if (!forceRefresh) {
         console.log('useMovieData: Checking cache...');
         const cached = await loadGraphData();
@@ -41,7 +60,7 @@ export const useMovieData = () => {
         }
       }
 
-      // Fetch from TMDB API - 1000 movies with progress tracking
+      // Priority 3: Fetch from TMDB API (requires API key)
       console.log('useMovieData: Fetching from TMDB API...');
       setProgress({ loaded: 0, total: 1000 });
       
@@ -93,6 +112,7 @@ export const useMovieData = () => {
     isLoading,
     error,
     progress,
+    usingStaticData,
     loadData,
     refreshData,
   };

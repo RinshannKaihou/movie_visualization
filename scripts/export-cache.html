@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Export Movie Data</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #0a0a0f;
+      color: #fff;
+    }
+    h1 { color: #00d4ff; }
+    button {
+      background: linear-gradient(135deg, #00d4ff, #8b5cf6);
+      border: none;
+      padding: 15px 30px;
+      color: white;
+      font-size: 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      margin: 10px 0;
+    }
+    button:hover { opacity: 0.9; }
+    .info {
+      background: rgba(255,255,255,0.05);
+      padding: 15px;
+      border-radius: 10px;
+      margin: 20px 0;
+    }
+    code {
+      background: rgba(255,255,255,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    #status { margin-top: 20px; }
+    .success { color: #22c55e; }
+    .error { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <h1>📦 Export Movie Data</h1>
+  <p>This tool exports your cached movie data from IndexedDB to a JSON file.</p>
+  
+  <div class="info">
+    <strong>Instructions:</strong>
+    <ol>
+      <li>Click "Export Data" to download the JSON file</li>
+      <li>Move the downloaded file to <code>public/data/movies.json</code></li>
+      <li>Commit and push to GitHub</li>
+    </ol>
+  </div>
+
+  <button onclick="exportData()">Export Data</button>
+  <div id="status"></div>
+
+  <script type="module">
+    import { openDB } from 'https://cdn.jsdelivr.net/npm/idb@8.0.3/+esm';
+    
+    window.exportData = async function() {
+      const status = document.getElementById('status');
+      status.innerHTML = 'Opening IndexedDB...';
+      
+      try {
+        const db = await openDB('movie-network-viz', 3);
+        const cached = await db.get('cache', 'graph-data');
+        
+        if (!cached) {
+          status.innerHTML = '<span class="error">❌ No cached data found! Please run the main app first to fetch movie data.</span>';
+          return;
+        }
+        
+        status.innerHTML = `
+          <div class="success">
+            ✓ Found cached data:<br>
+            - Movies: ${cached.movies?.length || 0}<br>
+            - Nodes: ${cached.graphData?.nodes?.length || 0}<br>
+            - Links: ${cached.graphData?.links?.length || 0}<br>
+            Preparing download...
+          </div>
+        `;
+        
+        const exportData = {
+          movies: cached.movies,
+          graphData: cached.graphData,
+          timestamp: cached.timestamp,
+          version: cached.version,
+        };
+        
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'movies.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        status.innerHTML += '<div class="success">✅ Download started!</div>';
+        
+        await db.close();
+      } catch (error) {
+        status.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+        console.error(error);
+      }
+    };
+  </script>
+</body>
+</html>

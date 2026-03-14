@@ -3,6 +3,7 @@ import { FilterPanel } from './FilterPanel';
 import { GenreLegend } from './GenreLegend';
 import { MovieDetailsPanel } from './MovieDetailsPanel';
 import { SearchBar } from './SearchBar';
+import { ExportDataButton } from './ExportDataButton';
 import { LoadingScreen, ErrorScreen } from './LoadingScreen';
 import { useMovieData } from '../hooks/useMovieData';
 import { useGraphMode } from '../hooks/useGraphMode';
@@ -93,53 +94,61 @@ export const GraphScene = () => {
           </p>
         </div>
 
-        {/* Refresh button */}
-        <button
-          onClick={refreshData}
-          style={{
-            pointerEvents: 'auto',
-            padding: '10px 16px',
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            borderRadius: 12,
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            fontSize: 13,
-            color: 'rgba(255, 255, 255, 0.7)',
-            cursor: 'pointer',
-            transition: 'all 200ms ease',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-            e.currentTarget.style.borderColor = 'rgba(0, 212, 255, 0.3)';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
-          title="Refresh data from API"
-        >
-          <svg 
-            style={{ width: 16, height: 16 }} 
-            fill="none" 
-            viewBox="0 0 24 24" 
-            stroke="currentColor"
+        {/* Action buttons */}
+        <div style={{
+          display: 'flex',
+          gap: 10,
+          alignItems: 'center',
+        }}>
+          <ExportDataButton />
+          
+          <button
+            onClick={refreshData}
+            style={{
+              pointerEvents: 'auto',
+              padding: '10px 16px',
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              borderRadius: 12,
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              fontSize: 13,
+              color: 'rgba(255, 255, 255, 0.7)',
+              cursor: 'pointer',
+              transition: 'all 200ms ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.borderColor = 'rgba(0, 212, 255, 0.3)';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+            title="Refresh data from API"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          Refresh
-        </button>
+            <svg 
+              style={{ width: 16, height: 16 }} 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Bottom status bar */}
