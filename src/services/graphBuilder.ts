@@ -223,44 +223,47 @@ export const buildGraphData = (movies: Movie[]): GraphData => {
   return { nodes, links: edges };
 };
 
+// Gravitational (edge) colors — threads of light between bodies
+const GRAV_COLORS: Record<ConnectionType, string> = {
+  same_actor:    '#ffb066', // ember
+  same_director: '#7ba2ff', // periwinkle
+  same_genre:    '#7cffd4', // aurora
+  similar_plot:  '#b68cff', // violet
+};
+
 // Get edge color based on connection types
 export const getEdgeColor = (types: ConnectionType[]): string => {
-  const colors: Record<ConnectionType, string> = {
-    same_actor: '#f97316',
-    same_director: '#3b82f6',
-    same_genre: '#22c55e',
-    similar_plot: '#a855f7',
-  };
+  return GRAV_COLORS[types[0]] || '#8891a6';
+};
 
-  // Return the color of the first (primary) type
-  return colors[types[0]] || '#64748b';
+// Spectral class → each genre is assigned a star color mapped to
+// real stellar classification (O/B/A/F/G/K/M + peculiar classes).
+// These are intentionally warmer and softer than the previous
+// hyper-saturated palette so many stars can coexist on one sky.
+export const SPECTRAL_COLORS: Record<string, string> = {
+  'Drama':       '#ffd27a', // G-type sun-amber
+  'Action':      '#ff5a3d', // M-type red giant
+  'Sci-Fi':      '#6edcff', // B-type blue
+  'Comedy':      '#ffe96b', // F-type yellow
+  'Thriller':    '#b68cff', // peculiar violet
+  'Horror':      '#d8344a', // carbon-star crimson
+  'Romance':     '#ff8fc4', // rose dwarf
+  'Animation':   '#8cf2c5', // cyan-green
+  'Documentary': '#9aa8ff', // faint giant
+  'Adventure':   '#ffb066', // ember orange
+  'Crime':       '#8891a6', // cool gray-blue
+  'Fantasy':     '#a57bff', // lilac
+  'Mystery':     '#7ba2ff', // periwinkle
+  'War':         '#b37a4a', // rust
 };
 
 // Get node color based on primary genre
 export const getNodeColor = (genres: string[]): string => {
-  const genreColors: Record<string, string> = {
-    'Drama': '#f59e0b',
-    'Action': '#ef4444',
-    'Sci-Fi': '#06b6d4',
-    'Comedy': '#eab308',
-    'Thriller': '#a855f7',
-    'Horror': '#dc2626',
-    'Romance': '#ec4899',
-    'Animation': '#10b981',
-    'Documentary': '#6366f1',
-    'Adventure': '#f97316',
-    'Crime': '#78716c',
-    'Fantasy': '#8b5cf6',
-    'Mystery': '#6366f1',
-    'War': '#854d0e',
-  };
-
-  // Return color of first genre, or default
-  return genreColors[genres[0]] || '#64748b';
+  return SPECTRAL_COLORS[genres[0]] || '#bcbfd0';
 };
 
 // Calculate node size based on rating
+// Scale rating (0-10) to star magnitude (4.5 - 13)
 export const getNodeSize = (rating: number): number => {
-  // Scale rating (0-10) to size (4-12)
-  return 4 + (rating / 10) * 8;
+  return 4.5 + (rating / 10) * 8.5;
 };

@@ -13,31 +13,31 @@ interface FilterOption {
 const FILTER_OPTIONS: FilterOption[] = [
   {
     type: 'same_actor',
-    label: 'Actor',
-    description: 'Shared cast members',
+    label: 'Cast',
+    description: 'Shared ensemble',
     color: CONNECTION_COLORS.same_actor,
-    icon: '🎭',
+    icon: '◈',
   },
   {
     type: 'same_director',
-    label: 'Director',
+    label: 'Auteur',
     description: 'Same director',
     color: CONNECTION_COLORS.same_director,
-    icon: '🎬',
+    icon: '◇',
   },
   {
     type: 'same_genre',
-    label: 'Genre',
-    description: 'Same category',
+    label: 'Spectrum',
+    description: 'Genre resonance',
     color: CONNECTION_COLORS.same_genre,
-    icon: '🏷️',
+    icon: '◉',
   },
   {
     type: 'similar_plot',
-    label: 'Plot',
-    description: 'Similar themes',
+    label: 'Theme',
+    description: 'Narrative echo',
     color: CONNECTION_COLORS.similar_plot,
-    icon: '📖',
+    icon: '◎',
   },
 ];
 
@@ -57,26 +57,27 @@ export const FilterPanel = () => {
   return (
     <div style={{
       position: 'absolute',
-      top: 80,
-      left: 24,
+      top: 108,
+      left: 28,
       zIndex: 10,
     }}>
-      {/* Main panel */}
+      {/* Main panel — observatory instrument card */}
       <div style={{
-        backgroundColor: 'rgba(13, 13, 21, 0.85)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderRadius: 16,
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 212, 255, 0.05)',
+        backgroundColor: 'rgba(10, 11, 24, 0.82)',
+        backdropFilter: 'blur(18px)',
+        WebkitBackdropFilter: 'blur(18px)',
+        borderRadius: 3,
+        border: '1px solid rgba(255, 251, 230, 0.12)',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 251, 230, 0.03), 0 0 40px rgba(124, 255, 212, 0.04)',
         overflow: 'hidden',
-        width: isExpanded ? 240 : 'auto',
-        transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)',
+        width: isExpanded ? 250 : 'auto',
+        transition: 'all 320ms cubic-bezier(0.4, 0, 0.2, 1)',
+        fontFamily: 'var(--font-mono)',
       }}>
         {/* Header */}
         <div style={{
-          padding: isExpanded ? '16px 16px 12px' : '12px',
-          borderBottom: isExpanded ? '1px solid rgba(255, 255, 255, 0.06)' : 'none',
+          padding: isExpanded ? '16px 16px 14px' : '12px',
+          borderBottom: isExpanded ? '1px solid rgba(255, 251, 230, 0.1)' : 'none',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -88,32 +89,36 @@ export const FilterPanel = () => {
             <>
               <div>
                 <h3 style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'rgba(255, 255, 255, 0.9)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  fontWeight: 500,
+                  color: 'var(--ink)',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
+                  letterSpacing: '0.22em',
                   margin: 0,
                 }}>
-                  Connections
+                  Gravitation
                 </h3>
                 <p style={{
-                  fontSize: 11,
-                  color: 'rgba(255, 255, 255, 0.4)',
-                  margin: '2px 0 0 0',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  letterSpacing: '0.15em',
+                  textTransform: 'uppercase',
+                  color: 'var(--ink-ghost)',
+                  margin: '4px 0 0 0',
                 }}>
-                  {activeFilters.size} active
+                  {activeFilters.size} / 4 channels
                 </p>
               </div>
-              <svg 
-                width="16" 
-                height="16" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2"
-                style={{ 
-                  color: 'rgba(255, 255, 255, 0.4)',
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                style={{
+                  color: 'var(--ink-ghost)',
                   transform: 'rotate(180deg)',
                   transition: 'transform 200ms',
                 }}
@@ -129,23 +134,25 @@ export const FilterPanel = () => {
               gap: 6,
             }}>
               <div style={{
-                width: 32,
-                height: 32,
-                borderRadius: 10,
-                backgroundColor: 'rgba(0, 212, 255, 0.15)',
+                width: 30,
+                height: 30,
+                borderRadius: 2,
+                backgroundColor: 'rgba(124, 255, 212, 0.08)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: '1px solid rgba(0, 212, 255, 0.2)',
+                border: '1px solid rgba(124, 255, 212, 0.25)',
               }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" strokeWidth="2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--aurora)" strokeWidth="1.5">
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
               </div>
               <span style={{
-                fontSize: 10,
-                color: 'rgba(255, 255, 255, 0.5)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                color: 'var(--ink-dim)',
                 fontWeight: 500,
+                letterSpacing: '0.1em',
               }}>
                 {activeFilters.size}
               </span>
@@ -169,78 +176,93 @@ export const FilterPanel = () => {
                     alignItems: 'center',
                     gap: 12,
                     padding: '10px 12px',
-                    borderRadius: 10,
-                    border: 'none',
-                    backgroundColor: isActive ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                    borderRadius: 2,
+                    border: '1px solid transparent',
+                    backgroundColor: isActive ? 'rgba(255, 251, 230, 0.05)' : 'transparent',
+                    borderColor: isActive ? `${option.color}35` : 'transparent',
                     cursor: 'pointer',
-                    transition: 'all 200ms ease',
+                    transition: 'all 240ms ease',
                     marginBottom: 4,
-                    opacity: isActive ? 1 : 0.6,
+                    opacity: isActive ? 1 : 0.55,
+                    fontFamily: 'var(--font-mono)',
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive) {
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
-                      e.currentTarget.style.opacity = '0.8';
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 251, 230, 0.03)';
+                      e.currentTarget.style.opacity = '0.85';
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isActive) {
                       e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.opacity = '0.6';
+                      e.currentTarget.style.opacity = '0.55';
                     }
                   }}
                 >
-                  {/* Icon */}
-                  <span style={{ fontSize: 16 }}>{option.icon}</span>
+                  {/* Glyph */}
+                  <span style={{
+                    fontSize: 14,
+                    color: isActive ? option.color : 'var(--ink-ghost)',
+                    textShadow: isActive ? `0 0 8px ${option.color}` : 'none',
+                    transition: 'all 200ms',
+                    width: 14,
+                    textAlign: 'center',
+                  }}>{option.icon}</span>
 
                   {/* Label & description */}
                   <div style={{ flex: 1, textAlign: 'left' }}>
                     <div style={{
-                      fontSize: 13,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
                       fontWeight: 500,
-                      color: 'rgba(255, 255, 255, 0.9)',
+                      letterSpacing: '0.18em',
+                      textTransform: 'uppercase',
+                      color: 'var(--ink)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 6,
+                      gap: 8,
                     }}>
                       {option.label}
                       <span style={{
-                        width: 6,
-                        height: 6,
+                        width: 5,
+                        height: 5,
                         borderRadius: '50%',
                         backgroundColor: option.color,
-                        boxShadow: isActive ? `0 0 8px ${option.color}` : 'none',
+                        boxShadow: isActive ? `0 0 10px ${option.color}` : 'none',
                         transition: 'box-shadow 200ms',
                       }} />
                     </div>
                     <div style={{
-                      fontSize: 11,
-                      color: 'rgba(255, 255, 255, 0.4)',
-                      marginTop: 1,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9,
+                      letterSpacing: '0.08em',
+                      color: 'var(--ink-ghost)',
+                      marginTop: 3,
                     }}>
                       {option.description}
                     </div>
                   </div>
 
-                  {/* Toggle switch */}
+                  {/* Toggle — slim rail */}
                   <div style={{
-                    width: 36,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: isActive ? `${option.color}40` : 'rgba(255, 255, 255, 0.1)',
+                    width: 28,
+                    height: 14,
+                    borderRadius: 0,
+                    backgroundColor: isActive ? `${option.color}30` : 'rgba(255, 251, 230, 0.08)',
+                    border: isActive ? `1px solid ${option.color}60` : '1px solid rgba(255, 251, 230, 0.1)',
                     position: 'relative',
-                    transition: 'background-color 200ms',
+                    transition: 'all 200ms',
                   }}>
                     <div style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: '50%',
-                      backgroundColor: isActive ? option.color : 'rgba(255, 255, 255, 0.5)',
+                      width: 8,
+                      height: 8,
+                      borderRadius: 0,
+                      backgroundColor: isActive ? option.color : 'rgba(255, 251, 230, 0.45)',
                       position: 'absolute',
                       top: 2,
-                      left: isActive ? 18 : 2,
-                      transition: 'all 200ms cubic-bezier(0.4, 0, 0.2, 1)',
-                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                      left: isActive ? 17 : 2,
+                      transition: 'all 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: isActive ? `0 0 10px ${option.color}` : 'none',
                     }} />
                   </div>
                 </button>
@@ -251,40 +273,46 @@ export const FilterPanel = () => {
             <div style={{
               display: 'flex',
               gap: 8,
-              marginTop: 8,
+              marginTop: 10,
               paddingTop: 12,
-              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+              borderTop: '1px dashed rgba(255, 251, 230, 0.1)',
             }}>
               <button
                 onClick={setAllFilters}
                 disabled={allActive}
                 style={{
                   flex: 1,
-                  padding: '8px 12px',
-                  fontSize: 11,
+                  padding: '8px 10px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
                   fontWeight: 500,
-                  color: allActive ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.7)',
-                  backgroundColor: allActive ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  borderRadius: 8,
+                  letterSpacing: '0.18em',
+                  textTransform: 'uppercase',
+                  color: allActive ? 'var(--ink-ghost)' : 'var(--ink)',
+                  backgroundColor: allActive ? 'transparent' : 'rgba(255, 251, 230, 0.05)',
+                  border: `1px solid ${allActive ? 'rgba(255, 251, 230, 0.08)' : 'rgba(255, 251, 230, 0.15)'}`,
+                  borderRadius: 2,
                   cursor: allActive ? 'not-allowed' : 'pointer',
                   transition: 'all 200ms',
                 }}
               >
-                Select All
+                All on
               </button>
               <button
                 onClick={clearAllFilters}
                 disabled={noneActive}
                 style={{
                   flex: 1,
-                  padding: '8px 12px',
-                  fontSize: 11,
+                  padding: '8px 10px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
                   fontWeight: 500,
-                  color: noneActive ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.7)',
-                  backgroundColor: noneActive ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  borderRadius: 8,
+                  letterSpacing: '0.18em',
+                  textTransform: 'uppercase',
+                  color: noneActive ? 'var(--ink-ghost)' : 'var(--ink)',
+                  backgroundColor: noneActive ? 'transparent' : 'rgba(255, 251, 230, 0.05)',
+                  border: `1px solid ${noneActive ? 'rgba(255, 251, 230, 0.08)' : 'rgba(255, 251, 230, 0.15)'}`,
+                  borderRadius: 2,
                   cursor: noneActive ? 'not-allowed' : 'pointer',
                   transition: 'all 200ms',
                 }}

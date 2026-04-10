@@ -114,29 +114,30 @@ export const GENRE_MAP: Record<number, string> = {
   37: 'Western',
 };
 
-// Genre colors for visualization
+// Spectral classes (genre → star color) — see services/graphBuilder.ts
+// for the astronomical analogies. Kept in sync with that module.
 export const GENRE_COLORS: Record<string, string> = {
-  'Drama': '#f59e0b',
-  'Action': '#ef4444',
-  'Sci-Fi': '#06b6d4',
-  'Comedy': '#eab308',
-  'Thriller': '#a855f7',
-  'Horror': '#dc2626',
-  'Romance': '#ec4899',
-  'Animation': '#10b981',
-  'Documentary': '#6366f1',
-  'Adventure': '#f97316',
-  'Crime': '#78716c',
-  'Fantasy': '#8b5cf6',
-  'Mystery': '#6366f1',
-  'War': '#854d0e',
-  'default': '#64748b',
+  'Drama':       '#ffd27a',
+  'Action':      '#ff5a3d',
+  'Sci-Fi':      '#6edcff',
+  'Comedy':      '#ffe96b',
+  'Thriller':    '#b68cff',
+  'Horror':      '#d8344a',
+  'Romance':     '#ff8fc4',
+  'Animation':   '#8cf2c5',
+  'Documentary': '#9aa8ff',
+  'Adventure':   '#ffb066',
+  'Crime':       '#8891a6',
+  'Fantasy':     '#a57bff',
+  'Mystery':     '#7ba2ff',
+  'War':         '#b37a4a',
+  'default':     '#bcbfd0',
 };
 
-// Connection type colors
+// Gravitational (edge) colors — threads of light between stars
 export const CONNECTION_COLORS: Record<ConnectionType, string> = {
-  same_actor: '#f97316',
-  same_director: '#3b82f6',
-  same_genre: '#22c55e',
-  similar_plot: '#a855f7',
+  same_actor:    '#ffb066',
+  same_director: '#7ba2ff',
+  same_genre:    '#7cffd4',
+  similar_plot:  '#b68cff',
 };

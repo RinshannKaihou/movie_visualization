@@ -1,30 +1,57 @@
+/* ─── Celestial Cinema typography ───────────────────────────────
+   Fraunces: editorial serif with optical sizing, for the display
+   voice (title, movie titles, section headers).
+   JetBrains Mono: technical mono for catalog data, ratings,
+   coordinates, and UI labels — reads as "observatory readout".
+   @import rules must come before all other rules per CSS spec. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
 
-/* Custom CSS Variables for the movie visualization theme */
+/* ─── Celestial Cinema palette ──────────────────────────────── */
 :root {
-  --bg-dark: #0a0a0f;
-  --bg-graph: #12121a;
-  --accent: #00d4ff;
-  --text: #f0f0f0;
-  --text-muted: #888899;
+  /* Void & atmosphere */
+  --void-0:      #05060d;          /* outermost backdrop */
+  --void-1:      #0a0b18;          /* graph interior */
+  --nebula-deep: #1a1038;          /* nebula violet */
+  --nebula-warm: #2a1030;          /* nebula rose */
 
-  /* Genre Colors */
-  --genre-drama: #f59e0b;
-  --genre-action: #ef4444;
-  --genre-scifi: #06b6d4;
-  --genre-comedy: #eab308;
-  --genre-thriller: #a855f7;
-  --genre-horror: #dc2626;
-  --genre-romance: #ec4899;
-  --genre-animation: #10b981;
-  --genre-documentary: #6366f1;
-  --genre-default: #64748b;
+  /* Light */
+  --starlight:   #fffbe6;          /* warm star-white */
+  --starlight-dim: rgba(255, 251, 230, 0.55);
+  --aurora:      #7cffd4;          /* signal accent */
+  --ember:       #ff9e5c;          /* warm accent */
 
-  /* Connection Colors */
-  --connection-actor: #f97316;
-  --connection-director: #3b82f6;
-  --connection-genre: #22c55e;
-  --connection-plot: #a855f7;
+  /* Text */
+  --ink:         #e8e6f0;
+  --ink-dim:     #7b7994;
+  --ink-ghost:   rgba(232, 230, 240, 0.35);
+
+  /* Spectral classes (genre → star color) */
+  --spec-drama:      #ffd27a;      /* G-type sun-amber */
+  --spec-action:     #ff5a3d;      /* M-type red giant */
+  --spec-scifi:      #6edcff;      /* B-type blue */
+  --spec-comedy:     #ffe96b;      /* F-type yellow */
+  --spec-thriller:   #b68cff;      /* peculiar violet */
+  --spec-horror:     #d8344a;      /* carbon-star crimson */
+  --spec-romance:    #ff8fc4;      /* rose dwarf */
+  --spec-animation:  #8cf2c5;      /* cyan-green */
+  --spec-documentary:#9aa8ff;      /* faint giant */
+  --spec-adventure:  #ffb066;      /* ember orange */
+  --spec-crime:      #8891a6;      /* cool gray-blue */
+  --spec-fantasy:    #a57bff;      /* lilac */
+  --spec-mystery:    #7ba2ff;      /* periwinkle */
+  --spec-war:        #b37a4a;      /* rust */
+
+  /* Connection (gravitational) colors */
+  --grav-actor:    #ffb066;
+  --grav-director: #7ba2ff;
+  --grav-genre:    #7cffd4;
+  --grav-plot:     #b68cff;
+
+  /* Type system */
+  --font-display: 'Fraunces', 'Times New Roman', serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  --font-ui:      'JetBrains Mono', ui-monospace, Menlo, sans-serif;
 }
 
 * {
@@ -40,80 +67,68 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--bg-dark);
-  color: var(--text);
+  font-family: var(--font-ui);
+  background-color: var(--void-0);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "ss02";
 }
 
-/* Graph container styles */
-.graph-container {
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(ellipse at center, var(--bg-graph) 0%, var(--bg-dark) 100%);
-}
-
-/* Custom scrollbar */
+/* ─── Custom scrollbar ─────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-dark);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--accent);
+  background: rgba(255, 251, 230, 0.15);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00a8cc;
+  background: rgba(255, 251, 230, 0.3);
 }
 
-/* Glow effect for nodes */
-.node-glow {
-  filter: drop-shadow(0 0 8px var(--accent));
+/* ─── Celestial animations ─────────────────────────────────── */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.15); }
 }
 
-/* Animation keyframes */
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.05);
-  }
+@keyframes drift {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-30px, -20px, 0); }
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.animate-pulse-slow {
-  animation: pulse 3s ease-in-out infinite;
+@keyframes celestial-pulse {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 12px currentColor; }
+  50%      { opacity: 0.7; box-shadow: 0 0 24px currentColor; }
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
+
+@keyframes nebula-pan {
+  0%   { transform: translate3d(0%, 0%, 0) scale(1.1); }
+  50%  { transform: translate3d(-2%, 1%, 0) scale(1.15); }
+  100% { transform: translate3d(0%, 0%, 0) scale(1.1); }
+}
+
+.animate-pulse-slow { animation: celestial-pulse 3s ease-in-out infinite; }
+.animate-fade-in    { animation: fadeIn 0.3s ease-out forwards; }
+
+/* Utility for editorial display type */
+.font-display { font-family: var(--font-display); font-optical-sizing: auto; }
+.font-mono    { font-family: var(--font-mono); }

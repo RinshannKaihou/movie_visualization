@@ -5,6 +5,7 @@ import { MovieDetailsPanel } from './MovieDetailsPanel';
 import { SearchBar } from './SearchBar';
 import { ExportDataButton } from './ExportDataButton';
 import { LoadingScreen, ErrorScreen } from './LoadingScreen';
+import { StardustField } from './StardustField';
 import { useMovieData } from '../hooks/useMovieData';
 import { useGraphMode } from '../hooks/useGraphMode';
 
@@ -12,18 +13,16 @@ export const GraphScene = () => {
   const { isLoading, error, refreshData, progress, usingStaticData } = useMovieData();
   const { is3DMode, isMobile, hasWebGL } = useGraphMode();
 
-  // Show loading screen
   if (isLoading) {
     return (
-      <LoadingScreen 
-        message={usingStaticData ? "Loading movie data..." : "Building movie network..."} 
+      <LoadingScreen
+        message={usingStaticData ? "Charting the sky..." : "Charting the sky..."}
         progress={progress}
-        hint={usingStaticData ? "Loading pre-built dataset" : undefined}
+        hint={usingStaticData ? "Resolving stellar catalog" : undefined}
       />
     );
   }
 
-  // Show error screen
   if (error) {
     return <ErrorScreen message={error} onRetry={refreshData} />;
   }
@@ -33,70 +32,123 @@ export const GraphScene = () => {
       position: 'relative',
       width: '100%',
       height: '100%',
-      background: 'radial-gradient(ellipse at center, #0d0d15 0%, #050508 100%)',
+      background: 'radial-gradient(ellipse at 50% 55%, #0a0b18 0%, #05060d 60%, #020309 100%)',
       overflow: 'hidden',
+      fontFamily: 'var(--font-ui)',
     }}>
-      {/* Animated background grid */}
+      {/* ─── Deep nebula gradient cloud ─── */}
       <div style={{
         position: 'absolute',
         inset: 0,
-        backgroundImage: `
-          linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px)
+        background: `
+          radial-gradient(ellipse 80% 60% at 18% 72%, rgba(120, 60, 180, 0.22) 0%, transparent 55%),
+          radial-gradient(ellipse 65% 55% at 82% 22%, rgba(220, 70, 130, 0.16) 0%, transparent 55%),
+          radial-gradient(ellipse 50% 45% at 65% 80%, rgba(110, 220, 255, 0.10) 0%, transparent 60%),
+          radial-gradient(ellipse 40% 35% at 28% 28%, rgba(255, 180, 110, 0.08) 0%, transparent 60%)
         `,
-        backgroundSize: '50px 50px',
-        transform: 'perspective(500px) rotateX(60deg) translateY(-100px) scale(2)',
-        transformOrigin: 'center top',
-        opacity: 0.5,
+        animation: 'nebula-pan 32s ease-in-out infinite',
         pointerEvents: 'none',
       }} />
 
-      {/* Main graph */}
+      {/* ─── Fine film grain overlay ─── */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+        opacity: 0.18,
+        mixBlendMode: 'overlay',
+        pointerEvents: 'none',
+      }} />
+
+      {/* ─── Distant background stars ─── */}
+      <StardustField />
+
+      {/* ─── Main graph (stars & gossamer threads) ─── */}
       <MovieGraph />
 
-      {/* UI overlays */}
+      {/* ─── Vignette for focus ─── */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        background: 'radial-gradient(ellipse at center, transparent 45%, rgba(5, 6, 13, 0.65) 100%)',
+        pointerEvents: 'none',
+      }} />
+
+      {/* ─── UI panels ─── */}
       <FilterPanel />
       <GenreLegend />
       <SearchBar />
       <MovieDetailsPanel />
 
-      {/* Top bar with title and refresh */}
+      {/* ─── Top bar ─── */}
       <div style={{
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
-        padding: '20px 24px',
+        padding: '24px 28px 32px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        background: 'linear-gradient(to bottom, rgba(5, 5, 8, 0.9) 0%, transparent 100%)',
+        background: 'linear-gradient(to bottom, rgba(5, 6, 13, 0.92) 0%, rgba(5, 6, 13, 0.4) 55%, transparent 100%)',
         pointerEvents: 'none',
         zIndex: 10,
       }}>
-        {/* Title */}
-        <div style={{
-          pointerEvents: 'auto',
-        }}>
+        <div style={{ pointerEvents: 'auto' }}>
+          {/* Catalog mark above title — observatory instrument feel */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 6,
+          }}>
+            <span style={{
+              display: 'inline-block',
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: 'var(--aurora)',
+              boxShadow: '0 0 10px var(--aurora)',
+              animation: 'celestial-pulse 3s ease-in-out infinite',
+            }} />
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '0.22em',
+              textTransform: 'uppercase',
+              color: 'var(--ink-ghost)',
+            }}>
+              CATALOG · N1
+            </span>
+          </div>
+
+          {/* Title set in Fraunces display */}
           <h1 style={{
-            fontSize: 24,
-            fontWeight: 700,
-            background: 'linear-gradient(135deg, #00d4ff 0%, #8b5cf6 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            letterSpacing: '-0.5px',
+            fontFamily: 'var(--font-display)',
+            fontSize: 38,
+            fontWeight: 400,
+            fontStyle: 'italic',
+            fontOpticalSizing: 'auto',
+            lineHeight: 1,
+            letterSpacing: '-0.015em',
+            color: 'var(--starlight)',
             margin: 0,
+            textShadow: '0 0 24px rgba(255, 251, 230, 0.22), 0 0 60px rgba(165, 123, 255, 0.18)',
           }}>
             CineVerse
           </h1>
+
+          {/* Subtitle in mono with em-dashes */}
           <p style={{
-            fontSize: 12,
-            color: 'rgba(255, 255, 255, 0.4)',
-            margin: '4px 0 0 0',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10.5,
             fontWeight: 400,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            color: 'var(--ink-dim)',
+            margin: '8px 0 0 0',
           }}>
-            Interactive Movie Network
+            An observable cinema · charted by gravity
           </p>
         </div>
 
@@ -107,67 +159,71 @@ export const GraphScene = () => {
           alignItems: 'center',
         }}>
           <ExportDataButton />
-          
+
           <button
             onClick={refreshData}
             style={{
               pointerEvents: 'auto',
               padding: '10px 16px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              borderRadius: 12,
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              fontSize: 13,
-              color: 'rgba(255, 255, 255, 0.7)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              fontWeight: 500,
+              letterSpacing: '0.16em',
+              textTransform: 'uppercase',
+              backgroundColor: 'rgba(255, 251, 230, 0.04)',
+              backdropFilter: 'blur(14px)',
+              WebkitBackdropFilter: 'blur(14px)',
+              borderRadius: 2,
+              border: '1px solid rgba(255, 251, 230, 0.15)',
+              color: 'var(--ink)',
               cursor: 'pointer',
-              transition: 'all 200ms ease',
+              transition: 'all 250ms ease',
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
+              boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-              e.currentTarget.style.borderColor = 'rgba(0, 212, 255, 0.3)';
-              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.backgroundColor = 'rgba(124, 255, 212, 0.08)';
+              e.currentTarget.style.borderColor = 'rgba(124, 255, 212, 0.4)';
+              e.currentTarget.style.boxShadow = '0 4px 24px rgba(0, 0, 0, 0.4), 0 0 18px rgba(124, 255, 212, 0.25)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.backgroundColor = 'rgba(255, 251, 230, 0.04)';
+              e.currentTarget.style.borderColor = 'rgba(255, 251, 230, 0.15)';
+              e.currentTarget.style.boxShadow = '0 4px 24px rgba(0, 0, 0, 0.4)';
             }}
-            title="Refresh data from API"
+            title="Refresh catalog"
           >
-            <svg 
-              style={{ width: 16, height: 16 }} 
-              fill="none" 
-              viewBox="0 0 24 24" 
+            <svg
+              style={{ width: 14, height: 14 }}
+              fill="none"
+              viewBox="0 0 24 24"
               stroke="currentColor"
+              strokeWidth={2}
             >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={2}
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-            Refresh
+            Resurvey
           </button>
         </div>
       </div>
 
-      {/* Bottom status bar */}
+      {/* ─── Bottom status bar — "instrument readout" ─── */}
       <div style={{
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        padding: '16px 24px',
+        padding: '24px 28px 22px',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        background: 'linear-gradient(to top, rgba(5, 5, 8, 0.9) 0%, transparent 100%)',
+        alignItems: 'flex-end',
+        background: 'linear-gradient(to top, rgba(5, 6, 13, 0.92) 0%, rgba(5, 6, 13, 0.4) 55%, transparent 100%)',
         pointerEvents: 'none',
         zIndex: 10,
       }}>
@@ -176,70 +232,77 @@ export const GraphScene = () => {
           display: 'flex',
           alignItems: 'center',
           gap: 10,
-          fontSize: 12,
-          color: 'rgba(255, 255, 255, 0.5)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: 'var(--ink-dim)',
           pointerEvents: 'auto',
         }}>
           <span style={{
-            width: 8,
-            height: 8,
+            width: 7,
+            height: 7,
             borderRadius: '50%',
-            backgroundColor: is3DMode ? '#00d4ff' : '#22c55e',
-            boxShadow: is3DMode ? '0 0 10px #00d4ff' : '0 0 10px #22c55e',
-            animation: 'pulse 2s ease-in-out infinite',
+            backgroundColor: is3DMode ? 'var(--spec-scifi)' : 'var(--aurora)',
+            boxShadow: is3DMode ? '0 0 12px var(--spec-scifi)' : '0 0 12px var(--aurora)',
+            animation: 'celestial-pulse 2.6s ease-in-out infinite',
           }} />
-          <span style={{ fontWeight: 500 }}>
-            {is3DMode ? '3D Mode Active' : `2D Mode ${!hasWebGL ? '(WebGL Unavailable)' : isMobile ? '(Mobile Optimized)' : ''}`}
+          <span>
+            {is3DMode
+              ? 'projection · volumetric'
+              : `projection · planar${!hasWebGL ? ' · no-gl' : isMobile ? ' · handheld' : ''}`}
           </span>
         </div>
 
-        {/* Help tooltip */}
+        {/* Help tooltip — styled as telescope controls */}
         <div style={{
-          fontSize: 12,
-          color: 'rgba(255, 255, 255, 0.35)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: 'var(--ink-ghost)',
           display: 'flex',
           alignItems: 'center',
-          gap: 16,
+          gap: 22,
         }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <kbd style={{
-              padding: '2px 6px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: 4,
-              fontSize: 10,
-              fontFamily: 'inherit',
+              padding: '3px 7px',
+              border: '1px solid rgba(255, 251, 230, 0.2)',
+              borderRadius: 2,
+              fontSize: 9,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--ink)',
+              background: 'rgba(255, 251, 230, 0.04)',
             }}>drag</kbd>
-            <span>Rotate</span>
+            <span>pan</span>
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <kbd style={{
-              padding: '2px 6px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: 4,
-              fontSize: 10,
-              fontFamily: 'inherit',
+              padding: '3px 7px',
+              border: '1px solid rgba(255, 251, 230, 0.2)',
+              borderRadius: 2,
+              fontSize: 9,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--ink)',
+              background: 'rgba(255, 251, 230, 0.04)',
             }}>scroll</kbd>
-            <span>Zoom</span>
+            <span>zoom</span>
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <kbd style={{
-              padding: '2px 6px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: 4,
-              fontSize: 10,
-              fontFamily: 'inherit',
+              padding: '3px 7px',
+              border: '1px solid rgba(255, 251, 230, 0.2)',
+              borderRadius: 2,
+              fontSize: 9,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--ink)',
+              background: 'rgba(255, 251, 230, 0.04)',
             }}>click</kbd>
-            <span>Details</span>
+            <span>observe</span>
           </span>
         </div>
       </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.6; transform: scale(1.1); }
-        }
-      `}</style>
     </div>
   );
 };
