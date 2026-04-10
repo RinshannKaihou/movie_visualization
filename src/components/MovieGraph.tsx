@@ -58,6 +58,84 @@ const toCoreColor = (hex: string, mix = 0.7): string => {
   return `rgb(${cr},${cg},${cb})`;
 };
 
+// -- star sprite cache ----------------------------------------------
+// Pre-render each spectral color as an offscreen canvas ONCE.
+// The hot render path then just calls `drawImage` on the cached
+// bitmap — effectively a GPU blit, instead of allocating a new
+// CanvasGradient object per node per frame (which was the main
+// stutter source).
+const STAR_SPRITE_SIZE = 192;           // bitmap resolution
+const STAR_SPRITE_HALF = STAR_SPRITE_SIZE / 2;
+const starSpriteCache = new Map<string, HTMLCanvasElement>();
+
+const buildStarSprite = (hex: string): HTMLCanvasElement => {
+  const canvas = document.createElement('canvas');
+  canvas.width = STAR_SPRITE_SIZE;
+  canvas.height = STAR_SPRITE_SIZE;
+  const ctx = canvas.getContext('2d')!;
+  const cx = STAR_SPRITE_HALF;
+  const cy = STAR_SPRITE_HALF;
+  const maxR = STAR_SPRITE_HALF;
+
+  // 1. Halo — radial gradient. Drawn ONCE per color, not per frame.
+  const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+  gradient.addColorStop(0,    rgba(hex, 0.95));
+  gradient.addColorStop(0.06, rgba(hex, 0.80));
+  gradient.addColorStop(0.18, rgba(hex, 0.42));
+  gradient.addColorStop(0.45, rgba(hex, 0.12));
+  gradient.addColorStop(0.75, rgba(hex, 0.03));
+  gradient.addColorStop(1,    rgba(hex, 0));
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, STAR_SPRITE_SIZE, STAR_SPRITE_SIZE);
+
+  // 2. Diffraction spikes — baked into the sprite so every star gets
+  //    the classic "telescope capture" look for zero per-frame cost.
+  const rayLen = maxR * 0.82;
+  ctx.strokeStyle = rgba(hex, 0.30);
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - rayLen, cy);
+  ctx.lineTo(cx + rayLen, cy);
+  ctx.moveTo(cx, cy - rayLen);
+  ctx.lineTo(cx, cy + rayLen);
+  ctx.stroke();
+
+  // Fainter 45° secondary spikes.
+  const diag = rayLen * 0.50 * Math.SQRT1_2;
+  ctx.strokeStyle = rgba(hex, 0.16);
+  ctx.lineWidth = 1.3;
+  ctx.beginPath();
+  ctx.moveTo(cx - diag, cy - diag);
+  ctx.lineTo(cx + diag, cy + diag);
+  ctx.moveTo(cx - diag, cy + diag);
+  ctx.lineTo(cx + diag, cy - diag);
+  ctx.stroke();
+
+  // 3. Bright spectral core.
+  ctx.fillStyle = toCoreColor(hex, 0.65);
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR * 0.09, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4. Warm white hotspot at the very center.
+  ctx.fillStyle = 'rgba(255, 251, 230, 0.92)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR * 0.045, 0, Math.PI * 2);
+  ctx.fill();
+
+  return canvas;
+};
+
+const getStarSprite = (hex: string): HTMLCanvasElement => {
+  let sprite = starSpriteCache.get(hex);
+  if (!sprite) {
+    sprite = buildStarSprite(hex);
+    starSpriteCache.set(hex, sprite);
+  }
+  return sprite;
+};
+
 export const MovieGraph = () => {
   const [hoveredNode, setHoveredNode] = useState<MovieNode | null>(null);
   const nodes = useGraphStore(state => state.nodes);
@@ -86,76 +164,31 @@ export const MovieGraph = () => {
   }, [selectedMovie, hoveredNode]);
 
   // -- 2D custom rendering ----------------------------------------
+  // Hot path — runs for every node every frame. Keep it as thin as
+  // possible: look up the cached star sprite and drawImage it at the
+  // right size. No gradients, no composite-mode switching, no extra
+  // paths for non-focused nodes.
   const paintNode = useCallback((
     node: MovieNode,
     ctx: CanvasRenderingContext2D,
-    globalScale: number,
   ) => {
     if (node.x == null || node.y == null) return;
 
-    const spectralColor = getNodeColor(node.genres);
     const radius = getNodeRadius(node);
     const isFocused = selectedMovie?.id === node.id || hoveredNode?.id === node.id;
 
-    // 1. Halo — soft radial glow. Radius scales with rating.
-    const haloRadius = radius * (isFocused ? 4.2 : 3.2);
-    const gradient = ctx.createRadialGradient(
-      node.x, node.y, 0,
-      node.x, node.y, haloRadius,
-    );
-    gradient.addColorStop(0,    rgba(spectralColor, isFocused ? 0.95 : 0.85));
-    gradient.addColorStop(0.25, rgba(spectralColor, isFocused ? 0.55 : 0.38));
-    gradient.addColorStop(0.6,  rgba(spectralColor, 0.12));
-    gradient.addColorStop(1,    rgba(spectralColor, 0));
+    // The sprite is sized so that the halo extends ~3x the core radius.
+    const drawSize = radius * (isFocused ? 8 : 6);
+    const half = drawSize * 0.5;
+    const sprite = getStarSprite(getNodeColor(node.genres));
+    ctx.drawImage(sprite, node.x - half, node.y - half, drawSize, drawSize);
 
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, haloRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 2. Cross rays — telescope diffraction spikes.
-    //    Only at reasonable zoom; skip when the sky is far away
-    //    (globalScale < 0.6) to avoid shimmering artifacts.
-    if (globalScale > 0.6) {
-      const rayLen = radius * (isFocused ? 5.5 : 4.2);
-      const rayAlpha = isFocused ? 0.55 : 0.32;
-      ctx.strokeStyle = rgba(spectralColor, rayAlpha);
-      ctx.lineWidth = Math.max(0.5, radius * 0.12);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(node.x - rayLen, node.y);
-      ctx.lineTo(node.x + rayLen, node.y);
-      ctx.moveTo(node.x, node.y - rayLen);
-      ctx.lineTo(node.x, node.y + rayLen);
-      ctx.stroke();
-
-      // Subtle 45° spikes — half length, lower alpha.
-      const diagLen = rayLen * 0.55;
-      const diag = diagLen * Math.SQRT1_2;
-      ctx.strokeStyle = rgba(spectralColor, rayAlpha * 0.55);
-      ctx.lineWidth = Math.max(0.4, radius * 0.08);
-      ctx.beginPath();
-      ctx.moveTo(node.x - diag, node.y - diag);
-      ctx.lineTo(node.x + diag, node.y + diag);
-      ctx.moveTo(node.x - diag, node.y + diag);
-      ctx.lineTo(node.x + diag, node.y - diag);
-      ctx.stroke();
-    }
-
-    // 3. Bright core — small dense center that reads as "the star itself".
-    const coreRadius = radius * (isFocused ? 0.8 : 0.55);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = toCoreColor(spectralColor, isFocused ? 0.85 : 0.65);
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, coreRadius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 4. Inner white hotspot for focused stars — "we are looking at you".
+    // Focused nodes get a tiny warm hotspot on top for extra pop.
+    // This is a single arc fill — negligible cost.
     if (isFocused) {
       ctx.fillStyle = 'rgba(255, 251, 230, 0.95)';
       ctx.beginPath();
-      ctx.arc(node.x, node.y, coreRadius * 0.45, 0, Math.PI * 2);
+      ctx.arc(node.x, node.y, radius * 0.35, 0, Math.PI * 2);
       ctx.fill();
     }
   }, [getNodeRadius, selectedMovie, hoveredNode]);
@@ -178,56 +211,48 @@ export const MovieGraph = () => {
   }, [getNodeRadius]);
 
   // -- gossamer edge renderer ------------------------------------
+  // Hot path — solid stroke only. The previous version created a
+  // CanvasLinearGradient per edge per frame which was the second
+  // biggest allocation source after the radial gradients.
   const paintLink = useCallback((
     link: MovieEdge,
     ctx: CanvasRenderingContext2D,
   ) => {
-    // `source` / `target` become objects after the graph is initialized.
     const src: any = link.source;
     const tgt: any = link.target;
     if (!src || !tgt || src.x == null || tgt.x == null) return;
 
-    const srcColor = getNodeColor(src.genres || []);
-    const tgtColor = getNodeColor(tgt.genres || []);
-    const edgeColor = getEdgeColor(link.types);
-
     const strength = link.strength || 1;
-    const baseAlpha = 0.18 + Math.min(strength - 1, 3) * 0.08;
+    const baseAlpha = 0.16 + Math.min(strength - 1, 3) * 0.07;
 
-    // Highlight edges touching the selected/hovered node.
+    // Highlight edges touching the focused node.
     const focusedId = selectedMovie?.id ?? hoveredNode?.id;
     const isFocused = focusedId != null && (src.id === focusedId || tgt.id === focusedId);
-    const alpha = isFocused ? Math.min(baseAlpha + 0.35, 0.85) : baseAlpha;
-    const width = (0.5 + (strength - 1) * 0.35) * (isFocused ? 1.8 : 1);
+    const alpha = isFocused ? Math.min(baseAlpha + 0.38, 0.9) : baseAlpha;
+    const width = (0.55 + (strength - 1) * 0.35) * (isFocused ? 1.8 : 1);
 
-    // Linear gradient between spectral colors, tinted by edge type.
-    const gradient = ctx.createLinearGradient(src.x, src.y, tgt.x, tgt.y);
-    gradient.addColorStop(0,   rgba(srcColor, alpha * 0.9));
-    gradient.addColorStop(0.5, rgba(edgeColor, alpha));
-    gradient.addColorStop(1,   rgba(tgtColor, alpha * 0.9));
-
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = gradient;
+    ctx.strokeStyle = rgba(getEdgeColor(link.types), alpha);
     ctx.lineWidth = width;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(src.x, src.y);
     ctx.lineTo(tgt.x, tgt.y);
     ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over';
   }, [selectedMovie, hoveredNode]);
 
   // -- particle config -------------------------------------------
+  // Only the strongest connections get photons — keeps the moving
+  // particle count manageable for the frame budget.
   const linkParticleCount = useCallback((link: MovieEdge) => {
-    // Stronger connections flow more photons.
-    // Cap at 3 so the sky doesn't turn into a traffic jam.
     const strength = link.strength || 1;
-    return Math.min(strength, 3);
+    if (strength >= 3) return 2;
+    if (strength >= 2) return 1;
+    return 0;
   }, []);
 
   const linkParticleWidth = useCallback((link: MovieEdge) => {
     const strength = link.strength || 1;
-    return 1.2 + (strength - 1) * 0.4;
+    return 1.1 + (strength - 1) * 0.35;
   }, []);
 
   const linkParticleColor = useCallback((link: MovieEdge) => {
@@ -300,10 +325,10 @@ export const MovieGraph = () => {
           linkSource="source"
           linkTarget="target"
           nodeLabel=""
-          nodeCanvasObjectMode={() => 'replace'}
+          nodeCanvasObjectMode="replace"
           nodeCanvasObject={paintNode}
           nodePointerAreaPaint={paintPointerArea}
-          linkCanvasObjectMode={() => 'replace'}
+          linkCanvasObjectMode="replace"
           linkCanvasObject={paintLink}
           linkDirectionalParticles={linkParticleCount}
           linkDirectionalParticleSpeed={0.0045}
@@ -312,11 +337,11 @@ export const MovieGraph = () => {
           onNodeClick={handleNodeClick}
           onNodeHover={handleNodeHover}
           backgroundColor="rgba(0,0,0,0)"
-          warmupTicks={12}
-          cooldownTicks={40}
-          cooldownTime={1600}
-          d3AlphaDecay={0.04}
-          d3VelocityDecay={0.38}
+          warmupTicks={8}
+          cooldownTicks={8}
+          cooldownTime={800}
+          d3AlphaDecay={0.05}
+          d3VelocityDecay={0.4}
         />
       )}
 
