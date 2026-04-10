@@ -18,7 +18,7 @@ export const useMovieData = () => {
     setError,
   } = useGraphStore();
   
-  // Track loading progress for 1000 movies
+  // Track loading progress for 2000 movies
   const [progress, setProgress] = useState<{ loaded: number; total: number } | undefined>();
   
   // Track if we're using static data
@@ -62,9 +62,9 @@ export const useMovieData = () => {
 
       // Priority 3: Fetch from TMDB API (requires API key)
       console.log('useMovieData: Fetching from TMDB API...');
-      setProgress({ loaded: 0, total: 1000 });
-      
-      const fetchedMovies = await fetchMoviesWithDetails(1000, (loaded, total) => {
+      setProgress({ loaded: 0, total: 2000 });
+
+      const fetchedMovies = await fetchMoviesWithDetails(2000, (loaded, total) => {
         console.log(`useMovieData: Progress: ${loaded}/${total}`);
         setProgress({ loaded, total });
       });

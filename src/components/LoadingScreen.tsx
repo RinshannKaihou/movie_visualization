@@ -113,7 +113,7 @@ export const LoadingScreen = ({ message = 'Loading...', progress, hint }: Loadin
         marginTop: 32,
         color: 'rgba(255, 255, 255, 0.3)'
       }}>
-        {hint || 'First load may take 3-5 minutes to fetch 1000 movies'}
+        {hint || 'First load may take 15-20 minutes to fetch 2000 movies'}
       </p>
       {!hint && (
         <p style={{

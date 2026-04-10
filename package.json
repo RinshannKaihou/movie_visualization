@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:data": "node --env-file=.env scripts/build-static-data.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",

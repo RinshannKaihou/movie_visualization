@@ -63,7 +63,7 @@ export const loadGraphData = async (): Promise<{
       return null;
     }
 
-    // Check if cache is less than 7 days old (longer cache for 1000 movies)
+    // Check if cache is less than 7 days old (longer cache for large datasets)
     const cacheAge = Date.now() - cached.timestamp;
     const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
 

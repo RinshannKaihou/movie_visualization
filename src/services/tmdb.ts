@@ -63,7 +63,7 @@ export const fetchAllTopRatedMovies = async (maxMovies: number = 250): Promise<T
       // Longer delay for large batches to avoid rate limiting
       // TMDB limit: ~40 requests per 10 seconds
       if (page < totalPages) {
-        const delay = maxMovies > 500 ? 250 : 100;
+        const delay = maxMovies > 1500 ? 300 : maxMovies > 500 ? 250 : 100;
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     } catch (error) {
@@ -83,11 +83,11 @@ export const transformToMovie = (details: TMDBMovieDetails): Movie => {
     .map(person => person.name);
 
   const leadActors = details.credits.cast
-    .slice(0, 5)
+    .slice(0, 10)
     .map(actor => actor.name);
 
   const plotKeywords = details.keywords.keywords
-    .slice(0, 10)
+    .slice(0, 20)
     .map(kw => kw.name);
 
   const genres = details.genres.map(g => g.name);
@@ -130,7 +130,7 @@ export const fetchMoviesWithDetails = async (
       // Longer delay for large batches to avoid rate limiting
       // TMDB limit: ~40 requests per 10 seconds
       if (i < basicMovies.length - 1) {
-        const delay = maxMovies > 500 ? 150 : 50;
+        const delay = maxMovies > 1500 ? 200 : maxMovies > 500 ? 150 : 50;
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     } catch (error) {
