@@ -3,6 +3,7 @@ import { useGraphStore } from '../stores/graphStore';
 import { fetchMoviesWithDetails } from '../services/tmdb';
 import { loadStaticData } from '../services/staticData';
 import { buildGraphData } from '../services/graphBuilder';
+import { runLayoutInWorker } from '../services/layoutClient';
 import { saveGraphData, loadGraphData, clearCache } from '../utils/cache';
 
 export const useMovieData = () => {
@@ -75,12 +76,30 @@ export const useMovieData = () => {
       const graphData = buildGraphData(fetchedMovies);
       console.log('useMovieData: Built graph data, nodes:', graphData.nodes.length, 'links:', graphData.links.length);
 
-      // Save to cache
-      await saveGraphData(fetchedMovies, graphData);
+      // Run one-shot layout in a worker so the main thread stays responsive
+      // during the 2000-node force settle. Positions are then pinned; there
+      // is no runtime tick (see MovieGraph cooldown/alphaDecay settings).
+      console.log('useMovieData: Running layout in worker...');
+      const layoutStart = performance.now();
+      const positions = await runLayoutInWorker(
+        fetchedMovies,
+        graphData.links,
+        { seed: 1, iterations: 300 },
+      );
+      console.log(`useMovieData: Layout done in ${(performance.now() - layoutStart).toFixed(0)}ms`);
+
+      const placedNodes = graphData.nodes.map(n => {
+        const p = positions.get(n.id);
+        return p ? { ...n, x: p.x, y: p.y } : n;
+      });
+      const placedGraph = { nodes: placedNodes, links: graphData.links };
+
+      // Save to cache (positions included so next load is pre-placed)
+      await saveGraphData(fetchedMovies, placedGraph);
 
       // Update state
       setMovies(fetchedMovies);
-      setGraphData(graphData);
+      setGraphData(placedGraph);
       console.log('useMovieData: State updated successfully');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load movie data';
