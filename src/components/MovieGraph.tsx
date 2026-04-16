@@ -308,11 +308,11 @@ export const MovieGraph = () => {
           onNodeClick={handleNodeClick}
           onNodeHover={handleNodeHover}
           backgroundColor="rgba(0,0,0,0)"
-          warmupTicks={8}
-          cooldownTicks={8}
-          cooldownTime={800}
-          d3AlphaDecay={0.05}
-          d3VelocityDecay={0.4}
+          warmupTicks={0}
+          cooldownTicks={0}
+          cooldownTime={0}
+          d3AlphaDecay={1}
+          d3VelocityDecay={1}
           linkOpacity={0.35}
           nodeOpacity={1}
           forceEngine="d3"
@@ -337,11 +337,11 @@ export const MovieGraph = () => {
           onNodeClick={handleNodeClick}
           onNodeHover={handleNodeHover}
           backgroundColor="rgba(0,0,0,0)"
-          warmupTicks={8}
-          cooldownTicks={8}
-          cooldownTime={800}
-          d3AlphaDecay={0.05}
-          d3VelocityDecay={0.4}
+          warmupTicks={0}
+          cooldownTicks={0}
+          cooldownTime={0}
+          d3AlphaDecay={1}
+          d3VelocityDecay={1}
         />
       )}
 
