@@ -25,4 +25,15 @@ describe('computeLayout', () => {
     expect(result.size).toBe(2);
     expect(result.get(1)).toMatchObject({ x: expect.any(Number), y: expect.any(Number) });
   });
+
+  it('different seeds produce different positions', () => {
+    const nodes = [fakeMovie(1), fakeMovie(2), fakeMovie(3), fakeMovie(4)];
+    const a = computeLayout(nodes, [], { seed: 1, iterations: 30 });
+    const b = computeLayout(nodes, [], { seed: 2, iterations: 30 });
+    const same = [...a.entries()].every(([id, pos]) => {
+      const other = b.get(id)!;
+      return other.x === pos.x && other.y === pos.y;
+    });
+    expect(same).toBe(false);
+  });
 });
