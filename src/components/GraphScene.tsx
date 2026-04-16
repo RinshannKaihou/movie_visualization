@@ -162,6 +162,7 @@ export const GraphScene = () => {
 
           <button
             onClick={refreshData}
+            disabled={isLoading}
             style={{
               pointerEvents: 'auto',
               padding: '10px 16px',
@@ -176,7 +177,8 @@ export const GraphScene = () => {
               borderRadius: 2,
               border: '1px solid rgba(255, 251, 230, 0.15)',
               color: 'var(--ink)',
-              cursor: 'pointer',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.45 : 1,
               transition: 'all 250ms ease',
               display: 'flex',
               alignItems: 'center',
@@ -184,6 +186,7 @@ export const GraphScene = () => {
               boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
             }}
             onMouseEnter={(e) => {
+              if (isLoading) return;
               e.currentTarget.style.backgroundColor = 'rgba(124, 255, 212, 0.08)';
               e.currentTarget.style.borderColor = 'rgba(124, 255, 212, 0.4)';
               e.currentTarget.style.boxShadow = '0 4px 24px rgba(0, 0, 0, 0.4), 0 0 18px rgba(124, 255, 212, 0.25)';
@@ -193,7 +196,7 @@ export const GraphScene = () => {
               e.currentTarget.style.borderColor = 'rgba(255, 251, 230, 0.15)';
               e.currentTarget.style.boxShadow = '0 4px 24px rgba(0, 0, 0, 0.4)';
             }}
-            title="Refresh catalog"
+            title={isLoading ? 'Resurvey in progress...' : 'Refresh catalog'}
           >
             <svg
               style={{ width: 14, height: 14 }}

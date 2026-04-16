@@ -2,7 +2,10 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { Movie, GraphData } from '../types';
 
 const DB_NAME = 'movie-network-viz';
-const DB_VERSION = 3; // Bumped to invalidate old cache with 100 movies
+// v4: positions are baked into cached graph data (Stage 1 of WebGL migration).
+// Older v3 entries lack x/y and would render piled at the origin now that the
+// runtime force simulation is frozen.
+const DB_VERSION = 4;
 
 interface MovieCacheDB {
   movies: Movie[];

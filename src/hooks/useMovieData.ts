@@ -5,6 +5,37 @@ import { loadStaticData } from '../services/staticData';
 import { buildGraphData } from '../services/graphBuilder';
 import { runLayoutInWorker } from '../services/layoutClient';
 import { saveGraphData, loadGraphData, clearCache } from '../utils/cache';
+import type { Movie, GraphData } from '../types';
+
+// Positions are required at render time: the runtime force simulation is
+// frozen (see MovieGraph warmupTicks=0 / d3AlphaDecay=1), so nodes without
+// x/y would render piled at the origin. Every load path must flow through
+// this guard before calling setGraphData.
+const ensurePositions = async (
+  movies: Movie[],
+  graphData: GraphData,
+): Promise<GraphData> => {
+  const allPlaced = graphData.nodes.length > 0
+    && graphData.nodes.every(n => n.x != null && n.y != null);
+  if (allPlaced) return graphData;
+
+  console.log('useMovieData: Positions missing; running layout worker...');
+  const layoutStart = performance.now();
+  const positions = await runLayoutInWorker(
+    movies,
+    graphData.links,
+    { seed: 1, iterations: 300 },
+  );
+  console.log(`useMovieData: Layout done in ${(performance.now() - layoutStart).toFixed(0)}ms`);
+
+  return {
+    nodes: graphData.nodes.map(n => {
+      const p = positions.get(n.id);
+      return p ? { ...n, x: p.x, y: p.y } : n;
+    }),
+    links: graphData.links,
+  };
+};
 
 export const useMovieData = () => {
   const {
@@ -18,10 +49,10 @@ export const useMovieData = () => {
     setLoading,
     setError,
   } = useGraphStore();
-  
+
   // Track loading progress for 2000 movies
   const [progress, setProgress] = useState<{ loaded: number; total: number } | undefined>();
-  
+
   // Track if we're using static data
   const [usingStaticData, setUsingStaticData] = useState(false);
 
@@ -40,8 +71,9 @@ export const useMovieData = () => {
         const staticData = await loadStaticData();
         if (staticData) {
           console.log('useMovieData: Using static data');
+          const placed = await ensurePositions(staticData.movies, staticData.graphData);
           setMovies(staticData.movies);
-          setGraphData(staticData.graphData);
+          setGraphData(placed);
           setUsingStaticData(true);
           setLoading(false);
           return;
@@ -54,8 +86,9 @@ export const useMovieData = () => {
         const cached = await loadGraphData();
         if (cached) {
           console.log('useMovieData: Found cached data, movies:', cached.movies.length);
+          const placed = await ensurePositions(cached.movies, cached.graphData);
           setMovies(cached.movies);
-          setGraphData(cached.graphData);
+          setGraphData(placed);
           setLoading(false);
           return;
         }
@@ -72,27 +105,11 @@ export const useMovieData = () => {
 
       console.log('useMovieData: Fetched movies:', fetchedMovies.length);
 
-      // Build graph data
+      // Build graph data (no positions yet — ensurePositions will run the worker)
       const graphData = buildGraphData(fetchedMovies);
       console.log('useMovieData: Built graph data, nodes:', graphData.nodes.length, 'links:', graphData.links.length);
 
-      // Run one-shot layout in a worker so the main thread stays responsive
-      // during the 2000-node force settle. Positions are then pinned; there
-      // is no runtime tick (see MovieGraph cooldown/alphaDecay settings).
-      console.log('useMovieData: Running layout in worker...');
-      const layoutStart = performance.now();
-      const positions = await runLayoutInWorker(
-        fetchedMovies,
-        graphData.links,
-        { seed: 1, iterations: 300 },
-      );
-      console.log(`useMovieData: Layout done in ${(performance.now() - layoutStart).toFixed(0)}ms`);
-
-      const placedNodes = graphData.nodes.map(n => {
-        const p = positions.get(n.id);
-        return p ? { ...n, x: p.x, y: p.y } : n;
-      });
-      const placedGraph = { nodes: placedNodes, links: graphData.links };
+      const placedGraph = await ensurePositions(fetchedMovies, graphData);
 
       // Save to cache (positions included so next load is pre-placed)
       await saveGraphData(fetchedMovies, placedGraph);
@@ -114,9 +131,10 @@ export const useMovieData = () => {
 
   // Refresh data (clear cache and fetch)
   const refreshData = useCallback(async () => {
+    if (isLoading) return; // Guard against concurrent Resurveys (UI also disables)
     await clearCache();
     await loadData(true);
-  }, [loadData]);
+  }, [loadData, isLoading]);
 
   // Load data on mount
   useEffect(() => {
