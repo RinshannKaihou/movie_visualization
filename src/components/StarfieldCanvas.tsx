@@ -4,6 +4,7 @@ import { select } from 'd3-selection';
 import { zoom as d3Zoom, zoomIdentity, type D3ZoomEvent } from 'd3-zoom';
 import { useGraphStore } from '../stores/graphStore';
 import { useGraphFilters } from '../hooks/useGraphFilters';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { buildHaloBitmap, hexToTintInt } from '../services/textures';
 import { buildNebulaBitmap } from '../services/nebulaTexture';
 import { buildHitIndex, type HitIndex } from '../services/hitTest';
@@ -54,6 +55,12 @@ const CLICK_DRAG_THRESHOLD_PX = 3;
 // Hit radius multiplier relative to visual radius. Tuned so pointers near
 // (not on) a star still register; tighter feels sticky, looser catches air.
 const HIT_RADIUS_MULTIPLIER = 1.5;
+// Entrance animation: total window during which every star has faded in.
+// We pick a staggered per-star delay in [0, ENTRANCE_STAGGER_MS] and a
+// fixed ENTRANCE_FADE_MS fade duration, so the last star is fully visible
+// at STAGGER + FADE ≈ 1.6 s.
+const ENTRANCE_STAGGER_MS = 800;
+const ENTRANCE_FADE_MS = 800;
 
 /**
  * Rebuild the single edge Graphics from scratch. Pixi v8 has no in-place
@@ -102,6 +109,7 @@ export const StarfieldCanvas = () => {
   const nodes = useGraphStore(state => state.nodes);
   const selectMovie = useGraphStore(state => state.selectMovie);
   const { visibleEdges } = useGraphFilters();
+  const reducedMotion = useReducedMotion();
 
   // Effect 1: scene build. Triggers when the nodes array identity changes.
   useEffect(() => {
@@ -176,6 +184,11 @@ export const StarfieldCanvas = () => {
         world.addChild(starsLayer);
 
         const nodeById = new Map<number, MovieNode>();
+        // Per-sprite birth delay for the entrance fade-in. Parallel array to
+        // starsLayer.children so we can read both cheaply in the ticker.
+        const starSprites: Sprite[] = [];
+        const starBirthDelays: number[] = [];
+
         for (const node of nodes) {
           if (node.x == null || node.y == null) continue;
           nodeById.set(node.id, node);
@@ -189,7 +202,37 @@ export const StarfieldCanvas = () => {
           sprite.blendMode = 'add';
           sprite.x = node.x;
           sprite.y = node.y;
+          sprite.alpha = reducedMotion ? 1 : 0;
           starsLayer.addChild(sprite);
+          starSprites.push(sprite);
+          starBirthDelays.push(Math.random() * ENTRANCE_STAGGER_MS);
+        }
+
+        // --- entrance animation -----------------------------------------
+        // Skip entirely under prefers-reduced-motion: sprites are already
+        // full-alpha and no ticker cost is incurred.
+        if (!reducedMotion) {
+          const startMs = performance.now();
+          const entranceTick = () => {
+            const elapsed = performance.now() - startMs;
+            let stillAnimating = false;
+            for (let i = 0; i < starSprites.length; i++) {
+              const delay = starBirthDelays[i];
+              const t = (elapsed - delay) / ENTRANCE_FADE_MS;
+              if (t >= 1) {
+                starSprites[i].alpha = 1;
+              } else if (t > 0) {
+                // easeOutCubic — pops then settles rather than linear.
+                const eased = 1 - Math.pow(1 - t, 3);
+                starSprites[i].alpha = eased;
+                stillAnimating = true;
+              } else {
+                stillAnimating = true;
+              }
+            }
+            if (!stillAnimating) app.ticker.remove(entranceTick);
+          };
+          app.ticker.add(entranceTick);
         }
 
         // --- hit index for pointer hover/click --------------------------
@@ -227,7 +270,7 @@ export const StarfieldCanvas = () => {
       setSceneReady(false);
       app.destroy(true, { children: true, texture: true });
     };
-  }, [nodes]);
+  }, [nodes, reducedMotion]);
 
   // Effect 2: edge updates. Runs on every filter/selection change AND
   // when scene flips from not-ready to ready (which is when the first
