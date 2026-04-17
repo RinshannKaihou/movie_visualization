@@ -37,7 +37,7 @@ export interface MovieEdge {
   strength: number;              // 1-4 (count of shared types)
 }
 
-// Graph data structure for react-force-graph
+// Graph data container consumed by StarfieldCanvas + layoutWorker
 export interface GraphData {
   nodes: MovieNode[];
   links: MovieEdge[];
