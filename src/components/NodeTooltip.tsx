@@ -7,15 +7,13 @@ interface NodeTooltipProps {
 
 export const NodeTooltip = ({ node }: NodeTooltipProps) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isVisible, setIsVisible] = useState(false);
+
+  // Visibility derives directly from `node` — no separate state needed.
+  // The tooltip is rendered whenever node is non-null; unmount/mount
+  // drives the fade-in animation.
 
   useEffect(() => {
-    if (!node) {
-      setIsVisible(false);
-      return;
-    }
-
-    setIsVisible(true);
+    if (!node) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       const offsetX = 18;
@@ -43,7 +41,7 @@ export const NodeTooltip = ({ node }: NodeTooltipProps) => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, [node]);
 
-  if (!isVisible || !node) return null;
+  if (!node) return null;
 
   return (
     <div

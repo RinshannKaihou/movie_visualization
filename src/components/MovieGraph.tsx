@@ -1,6 +1,4 @@
-// @ts-ignore - types are incomplete
 import ForceGraph2D from 'react-force-graph-2d';
-// @ts-ignore - types are incomplete
 import ForceGraph3D from 'react-force-graph-3d';
 import { useMemo, useState, useCallback } from 'react';
 import { getEdgeColor, getNodeColor, getNodeSize } from '../services/graphBuilder';
@@ -218,9 +216,13 @@ export const MovieGraph = () => {
     link: MovieEdge,
     ctx: CanvasRenderingContext2D,
   ) => {
-    const src: any = link.source;
-    const tgt: any = link.target;
-    if (!src || !tgt || src.x == null || tgt.x == null) return;
+    // At runtime, react-force-graph replaces the numeric id on each edge
+    // with the resolved MovieNode object. The MovieEdge type still declares
+    // `source`/`target` as `number`, so we cast here. (This file is going
+    // away in Stage 3 with the full StarfieldCanvas cutover.)
+    const src = link.source as unknown as MovieNode;
+    const tgt = link.target as unknown as MovieNode;
+    if (!src || !tgt || src.x == null || src.y == null || tgt.x == null || tgt.y == null) return;
 
     const strength = link.strength || 1;
     const baseAlpha = 0.16 + Math.min(strength - 1, 3) * 0.07;

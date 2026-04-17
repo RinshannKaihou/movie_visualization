@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { select } from 'd3-selection';
 import { zoom as d3Zoom, zoomIdentity, type D3ZoomEvent } from 'd3-zoom';
 import { useGraphStore } from '../stores/graphStore';
 import { useGraphFilters } from '../hooks/useGraphFilters';
 import { buildHaloBitmap, hexToTintInt } from '../services/textures';
+import { buildHitIndex, type HitIndex } from '../services/hitTest';
 import { getEdgeColor, getNodeColor, getNodeSize } from '../services/graphBuilder';
+import { NodeTooltip } from './NodeTooltip';
 import type { MovieEdge, MovieNode } from '../types';
 
 /**
@@ -39,7 +41,18 @@ const STAR_SCALE_MULTIPLIER = 6;
 interface SceneRefs {
   edgesLayer: Graphics;
   nodeById: Map<number, MovieNode>;
+  world: Container;
+  hitIndex: HitIndex;
+  canvas: HTMLCanvasElement;
 }
+
+// Pointer movement in screen pixels below which a pointerup is treated as
+// a click rather than a drag-release. d3-zoom handles drags but emits no
+// event for a short press-release, so we disambiguate ourselves.
+const CLICK_DRAG_THRESHOLD_PX = 3;
+// Hit radius multiplier relative to visual radius. Tuned so pointers near
+// (not on) a star still register; tighter feels sticky, looser catches air.
+const HIT_RADIUS_MULTIPLIER = 1.5;
 
 /**
  * Rebuild the single edge Graphics from scratch. Pixi v8 has no in-place
@@ -74,15 +87,20 @@ const rebuildEdges = (
 export const StarfieldCanvas = () => {
   const hostRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<SceneRefs | null>(null);
+  // Flips true once Pixi init resolves and the scene is populated.
+  // Effect 2 depends on this so it re-runs once the scene becomes ready,
+  // even if `visibleEdges` hasn't changed since effect setup.
+  const [sceneReady, setSceneReady] = useState(false);
+
+  // Local hover state powers the NodeTooltip overlay. We don't route this
+  // through the store because the tooltip is a pure UI detail and we want
+  // the hover → tooltip latency to be minimal (direct setState, no global
+  // re-render).
+  const [hoveredNode, setHoveredNode] = useState<MovieNode | null>(null);
 
   const nodes = useGraphStore(state => state.nodes);
+  const selectMovie = useGraphStore(state => state.selectMovie);
   const { visibleEdges } = useGraphFilters();
-
-  // Keep the latest visibleEdges accessible inside the async init() callback
-  // so the first draw uses current filter state, not the stale value
-  // captured at effect creation.
-  const edgesRef = useRef(visibleEdges);
-  edgesRef.current = visibleEdges;
 
   // Effect 1: scene build. Triggers when the nodes array identity changes.
   useEffect(() => {
@@ -160,14 +178,30 @@ export const StarfieldCanvas = () => {
           starsLayer.addChild(sprite);
         }
 
-        // Draw initial edges using whatever filter state is current RIGHT
-        // NOW (not whatever was current when this effect was scheduled).
-        rebuildEdges(edgesLayer, edgesRef.current, nodeById);
+        // --- hit index for pointer hover/click --------------------------
+        // Built once from pinned positions. Radius is the visual-halo
+        // extent scaled for a comfortable hit margin.
+        const hitNodes = nodes
+          .filter(n => n.x != null && n.y != null)
+          .map(n => ({
+            id: n.id,
+            x: n.x as number,
+            y: n.y as number,
+            radius: getNodeSize(n.rating) * HIT_RADIUS_MULTIPLIER,
+          }));
+        const hitIndex = buildHitIndex(hitNodes);
 
-        sceneRef.current = { edgesLayer, nodeById };
-        console.log(
-          `StarfieldCanvas: ${starsLayer.children.length} stars, ${edgesRef.current.length} edges`,
-        );
+        sceneRef.current = {
+          edgesLayer,
+          nodeById,
+          world,
+          hitIndex,
+          canvas: app.canvas,
+        };
+        // Flip state so Effect 2 runs its first edge draw now that the
+        // scene is populated. React batches this as a state update.
+        setSceneReady(true);
+        console.log(`StarfieldCanvas: ${starsLayer.children.length} stars rendered`);
       })
       .catch((err: unknown) => {
         console.error('StarfieldCanvas: Pixi init failed', err);
@@ -176,17 +210,94 @@ export const StarfieldCanvas = () => {
     return () => {
       cancelled = true;
       sceneRef.current = null;
+      setSceneReady(false);
       app.destroy(true, { children: true, texture: true });
     };
   }, [nodes]);
 
-  // Effect 2: edge updates. Runs on every filter/selection change, but
-  // no-ops until Effect 1's init has resolved.
+  // Effect 2: edge updates. Runs on every filter/selection change AND
+  // when scene flips from not-ready to ready (which is when the first
+  // edge draw after init happens).
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene) return;
+    if (!scene || !sceneReady) return;
     rebuildEdges(scene.edgesLayer, visibleEdges, scene.nodeById);
-  }, [visibleEdges]);
+  }, [visibleEdges, sceneReady]);
 
-  return <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />;
+  // Effect 3: pointer hit-test. Runs once the scene is ready; rebinds when
+  // the node set changes (because the hit index rebuilds with it).
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !sceneReady) return;
+
+    const { canvas, world, hitIndex } = scene;
+    let lastHoveredId: number | null = null;
+    let pointerDownAt: { x: number; y: number } | null = null;
+
+    const toWorld = (clientX: number, clientY: number) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = clientX - rect.left;
+      const sy = clientY - rect.top;
+      return {
+        x: (sx - world.position.x) / world.scale.x,
+        y: (sy - world.position.y) / world.scale.y,
+      };
+    };
+
+    const onMove = (e: PointerEvent) => {
+      const { x, y } = toWorld(e.clientX, e.clientY);
+      const hit = hitIndex.pick(x, y);
+      const id = hit?.id ?? null;
+      if (id !== lastHoveredId) {
+        lastHoveredId = id;
+        setHoveredNode(id == null ? null : nodes.find(n => n.id === id) ?? null);
+      }
+    };
+
+    const onDown = (e: PointerEvent) => {
+      pointerDownAt = { x: e.clientX, y: e.clientY };
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (!pointerDownAt) return;
+      const dx = e.clientX - pointerDownAt.x;
+      const dy = e.clientY - pointerDownAt.y;
+      pointerDownAt = null;
+      // Only treat as a click if the pointer barely moved. Otherwise
+      // this was a drag and d3-zoom handled it.
+      if (Math.hypot(dx, dy) > CLICK_DRAG_THRESHOLD_PX) return;
+      const { x, y } = toWorld(e.clientX, e.clientY);
+      const hit = hitIndex.pick(x, y);
+      if (hit) {
+        const node = nodes.find(n => n.id === hit.id);
+        if (node) selectMovie(node);
+      }
+    };
+
+    const onLeave = () => {
+      if (lastHoveredId != null) {
+        lastHoveredId = null;
+        setHoveredNode(null);
+      }
+    };
+
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointerleave', onLeave);
+
+    return () => {
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointerleave', onLeave);
+    };
+  }, [nodes, selectMovie, sceneReady]);
+
+  return (
+    <>
+      <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
+      <NodeTooltip node={hoveredNode} />
+    </>
+  );
 };
