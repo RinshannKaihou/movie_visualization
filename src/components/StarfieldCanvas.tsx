@@ -234,6 +234,13 @@ export const StarfieldCanvas = () => {
 
     const app = new Application();
     let cancelled = false;
+    // Guards against destroying before init resolves. Pixi v8's destroy()
+    // calls plugin hooks (e.g. ResizePlugin._cancelResize) that only exist
+    // once init() has finished installing plugins. StrictMode's synchronous
+    // mount → unmount → mount can trigger the cleanup while init is still
+    // pending; calling destroy() there throws "_cancelResize is not a
+    // function" and bubbles up to React, which unmounts the whole tree.
+    let initDone = false;
 
     app
       .init({
@@ -244,6 +251,7 @@ export const StarfieldCanvas = () => {
         autoDensity: true,
       })
       .then(() => {
+        initDone = true;
         if (cancelled) {
           app.destroy(true, { children: true, texture: true });
           return;
@@ -500,7 +508,12 @@ export const StarfieldCanvas = () => {
       cancelled = true;
       sceneRef.current = null;
       setSceneReady(false);
-      app.destroy(true, { children: true, texture: true });
+      // If init hasn't resolved, the .then() branch above will see
+      // cancelled=true and destroy there. Calling destroy() now would
+      // hit uninitialized plugin state.
+      if (initDone) {
+        app.destroy(true, { children: true, texture: true });
+      }
     };
   }, [nodes, reducedMotion]);
 
