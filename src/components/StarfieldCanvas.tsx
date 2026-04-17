@@ -79,6 +79,9 @@ interface SceneRefs {
   viewportWidth: number;
   viewportHeight: number;
   app: Application;
+  nebula: Sprite;
+  nebulaCenterX: number;
+  nebulaCenterY: number;
 }
 
 // Pointer movement in screen pixels below which a pointerup is treated as
@@ -126,6 +129,13 @@ const PHOTON_EDGE_COUNT = 3;
 const PHOTON_SPEED = 0.0005;
 const PHOTONS_PER_EDGE = 3;
 const PHOTON_SCALE = 0.14;
+
+// Maximum nebula offset from center in pixels. The nebula drifts the
+// opposite direction of the cursor — classic parallax sense of depth.
+const PARALLAX_MAX_OFFSET = 18;
+// Inertia factor for cursor-tracking. Each frame the nebula position
+// eases toward the target by this fraction; lower = more lag.
+const PARALLAX_EASE = 0.06;
 
 // Simple rAF-driven tween runner. No dependency needed; used for star-alpha
 // fades and the camera neighborhood pan. Returns an abort function.
@@ -431,6 +441,9 @@ export const StarfieldCanvas = () => {
           viewportWidth: app.screen.width,
           viewportHeight: app.screen.height,
           app,
+          nebula,
+          nebulaCenterX: app.screen.width / 2,
+          nebulaCenterY: app.screen.height / 2,
         };
         // Flip state so Effect 2 runs its first edge draw now that the
         // scene is populated. React batches this as a state update.
@@ -734,6 +747,47 @@ export const StarfieldCanvas = () => {
       for (const p of photons) p.sprite.destroy();
     };
   }, [selectedMovie, sceneReady, reducedMotion]);
+
+  // Effect 5: mouse parallax on the nebula backdrop. Nebula drifts by up
+  // to PARALLAX_MAX_OFFSET pixels AWAY from the cursor (opposite direction
+  // gives the "cursor is in front, backdrop is behind" depth cue).
+  // Skips entirely under prefers-reduced-motion.
+  useEffect(() => {
+    if (reducedMotion) return;
+    const scene = sceneRef.current;
+    if (!scene || !sceneReady) return;
+
+    const { canvas, nebula, nebulaCenterX, nebulaCenterY, app } = scene;
+    let targetOffsetX = 0;
+    let targetOffsetY = 0;
+    let currentOffsetX = 0;
+    let currentOffsetY = 0;
+
+    const onMove = (e: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      // Normalize cursor to [-1, 1] in each axis, then invert for the
+      // opposite-direction drift.
+      const nx = (e.clientX - rect.left - rect.width / 2) / (rect.width / 2);
+      const ny = (e.clientY - rect.top - rect.height / 2) / (rect.height / 2);
+      targetOffsetX = -nx * PARALLAX_MAX_OFFSET;
+      targetOffsetY = -ny * PARALLAX_MAX_OFFSET;
+    };
+
+    const parallaxTick = () => {
+      currentOffsetX += (targetOffsetX - currentOffsetX) * PARALLAX_EASE;
+      currentOffsetY += (targetOffsetY - currentOffsetY) * PARALLAX_EASE;
+      nebula.x = nebulaCenterX + currentOffsetX;
+      nebula.y = nebulaCenterY + currentOffsetY;
+    };
+
+    canvas.addEventListener('pointermove', onMove);
+    app.ticker.add(parallaxTick);
+
+    return () => {
+      canvas.removeEventListener('pointermove', onMove);
+      app.ticker.remove(parallaxTick);
+    };
+  }, [sceneReady, reducedMotion]);
 
   return (
     <>
