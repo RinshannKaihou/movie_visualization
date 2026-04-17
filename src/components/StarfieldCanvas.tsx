@@ -9,6 +9,7 @@ import { useGraphFilters } from '../hooks/useGraphFilters';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { buildHaloBitmap, hexToTintInt } from '../services/textures';
 import { buildNebulaBitmap } from '../services/nebulaTexture';
+import { buildDiffractionBitmap } from '../services/diffractionTexture';
 import { buildHitIndex, type HitIndex } from '../services/hitTest';
 import { lodStrengthCutoff } from '../services/viewport';
 import { getEdgeColor, getNodeColor, getNodeSize } from '../services/graphBuilder';
@@ -37,6 +38,14 @@ import type { MovieEdge, MovieNode } from '../types';
  */
 
 const HALO_SIZE = 256;
+// Diffraction sprite dimension. Bigger than the halo core so the rays
+// protrude cleanly; scaled by rating so brighter stars have longer rays.
+const DIFFRACTION_SIZE = 192;
+// Only stars rated this high wear diffraction spikes. Keeps the visual
+// clean on the dense mid-rated cluster while marking standouts.
+const DIFFRACTION_RATING_THRESHOLD = 7.5;
+// Spike sprite draw diameter ≈ halo diameter × this multiplier.
+const DIFFRACTION_SCALE_MULTIPLIER = 8;
 // Empirical multiplier: sprite diameter ≈ 6 × base-rating radius. The
 // halo's Gaussian falloff means the visible extent is smaller than the
 // full sprite bounds, so this factor makes the visible halo match the
@@ -292,6 +301,10 @@ export const StarfieldCanvas = () => {
         const photonTex = haloTex;
 
         // --- stars --------------------------------------------------------
+        // Shared diffraction texture built once; each high-rating sprite
+        // gets a spike child so alpha (twinkle, focus dim, entrance)
+        // inherits automatically through the scene graph.
+        const diffractionTex = Texture.from(buildDiffractionBitmap(DIFFRACTION_SIZE));
         const starsLayer = new Container();
         world.addChild(starsLayer);
 
@@ -321,6 +334,28 @@ export const StarfieldCanvas = () => {
           starsLayer.addChild(sprite);
           starSprites.push(sprite);
           starBirthDelays.push(Math.random() * ENTRANCE_STAGGER_MS);
+
+          // Diffraction spikes only on the bright stars. The spike is a
+          // CHILD of the halo sprite so alpha (entrance, twinkle, focus
+          // dim) inherits for free through the Pixi scene graph. Spike's
+          // local (x, y) is (0, 0) relative to the parent halo.
+          if (node.rating >= DIFFRACTION_RATING_THRESHOLD) {
+            const spike = new Sprite(diffractionTex);
+            spike.anchor.set(0.5);
+            // Spike diameter relative to halo diameter. Bright stars get
+            // longer rays. Because spike is a child of a halo that is
+            // itself scaled by radius/HALO_SIZE, we divide to get the
+            // spike scale in the parent's LOCAL space.
+            const ratingBonus = (node.rating - DIFFRACTION_RATING_THRESHOLD) * 0.3;
+            const spikeDiameter = radius * DIFFRACTION_SCALE_MULTIPLIER * (1 + ratingBonus);
+            const haloLocalScale = drawDiameter / HALO_SIZE;
+            spike.scale.set(spikeDiameter / DIFFRACTION_SIZE / haloLocalScale);
+            spike.alpha = 0.65; // constant; inherits host sprite's alpha
+            // Spike tint starts pure white — halo tints via parent, and
+            // additive blend keeps them in the halo's spectral family.
+            spike.blendMode = 'add';
+            sprite.addChild(spike);
+          }
         }
 
         // --- entrance animation -----------------------------------------
