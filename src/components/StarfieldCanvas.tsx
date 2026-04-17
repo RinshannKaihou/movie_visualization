@@ -789,6 +789,48 @@ export const StarfieldCanvas = () => {
     };
   }, [sceneReady, reducedMotion]);
 
+  // Effect 6: pause Pixi ticker after 1s idle to save battery.
+  // Re-wakes on any pointer/wheel/pointerdown event. Skips pausing
+  // while a movie is selected — photons need the ticker to animate.
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !sceneReady) return;
+
+    const { app, canvas } = scene;
+    let idleTimer: number | null = null;
+
+    const wake = () => {
+      if (!app.ticker.started) app.ticker.start();
+      if (idleTimer != null) window.clearTimeout(idleTimer);
+      // Guard: do not schedule pause while photons are flowing.
+      if (useGraphStore.getState().selectedMovie) return;
+      idleTimer = window.setTimeout(() => app.ticker.stop(), 1000);
+    };
+
+    canvas.addEventListener('pointermove', wake);
+    canvas.addEventListener('wheel', wake);
+    canvas.addEventListener('pointerdown', wake);
+
+    // Initial wake to start the idle clock.
+    wake();
+
+    return () => {
+      canvas.removeEventListener('pointermove', wake);
+      canvas.removeEventListener('wheel', wake);
+      canvas.removeEventListener('pointerdown', wake);
+      if (idleTimer != null) window.clearTimeout(idleTimer);
+    };
+  }, [sceneReady]);
+
+  // Re-wake ticker when selectedMovie changes so photons animate.
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !sceneReady) return;
+    if (selectedMovie && !scene.app.ticker.started) {
+      scene.app.ticker.start();
+    }
+  }, [selectedMovie, sceneReady]);
+
   return (
     <>
       <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
