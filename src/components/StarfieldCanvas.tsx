@@ -10,6 +10,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { buildHaloBitmap, hexToTintInt } from '../services/textures';
 import { buildNebulaBitmap } from '../services/nebulaTexture';
 import { buildHitIndex, type HitIndex } from '../services/hitTest';
+import { lodStrengthCutoff } from '../services/viewport';
 import { getEdgeColor, getNodeColor, getNodeSize } from '../services/graphBuilder';
 import { NodeTooltip } from './NodeTooltip';
 import type { MovieEdge, MovieNode } from '../types';
@@ -138,15 +139,23 @@ const tween = (
 /**
  * Rebuild the single edge Graphics from scratch. Pixi v8 has no in-place
  * segment mutation — you clear() and replay. At 2000 edges, this is in
- * the microseconds; it runs only on filter/selection change, not per frame.
+ * the microseconds; it runs only on filter/selection/zoom change, not per
+ * frame.
+ *
+ * The zoom-based `strengthCutoff` skips edges whose strength is too weak
+ * at the current zoom level: at extreme zoom-out only the strongest
+ * connections are drawn, to keep the visual readable.
  */
 const rebuildEdges = (
   g: Graphics,
   edges: MovieEdge[],
   nodeById: Map<number, MovieNode>,
+  strengthCutoff: number,
 ) => {
   g.clear();
   for (const e of edges) {
+    if (e.strength < strengthCutoff) continue;
+
     const srcId = typeof e.source === 'number' ? e.source : (e.source as MovieNode).id;
     const tgtId = typeof e.target === 'number' ? e.target : (e.target as MovieNode).id;
     const s = nodeById.get(srcId);
@@ -182,6 +191,7 @@ export const StarfieldCanvas = () => {
   const nodes = useGraphStore(state => state.nodes);
   const selectMovie = useGraphStore(state => state.selectMovie);
   const selectedMovie = useGraphStore(state => state.selectedMovie);
+  const zoom = useGraphStore(state => state.zoom);
   const { visibleEdges } = useGraphFilters();
   const reducedMotion = useReducedMotion();
 
@@ -371,14 +381,15 @@ export const StarfieldCanvas = () => {
     };
   }, [nodes, reducedMotion]);
 
-  // Effect 2: edge updates. Runs on every filter/selection change AND
-  // when scene flips from not-ready to ready (which is when the first
-  // edge draw after init happens).
+  // Effect 2: edge updates. Runs on filter/selection change, on scene
+  // ready, and on zoom change (zoom drives the LOD strength cutoff).
+  // Rebuild cost ~1ms for 2000 edges; we do not debounce because d3-zoom
+  // already coalesces wheel events.
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !sceneReady) return;
-    rebuildEdges(scene.edgesLayer, visibleEdges, scene.nodeById);
-  }, [visibleEdges, sceneReady]);
+    rebuildEdges(scene.edgesLayer, visibleEdges, scene.nodeById, lodStrengthCutoff(zoom));
+  }, [visibleEdges, sceneReady, zoom]);
 
   // Effect 3: pointer hit-test. Runs once the scene is ready; rebinds when
   // the node set changes (because the hit index rebuilds with it).
