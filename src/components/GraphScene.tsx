@@ -6,11 +6,9 @@ import { SearchBar } from './SearchBar';
 import { ExportDataButton } from './ExportDataButton';
 import { LoadingScreen, ErrorScreen } from './LoadingScreen';
 import { useMovieData } from '../hooks/useMovieData';
-import { useGraphMode } from '../hooks/useGraphMode';
 
 export const GraphScene = () => {
   const { isLoading, error, refreshData, progress, usingStaticData } = useMovieData();
-  const { is3DMode, isMobile, hasWebGL } = useGraphMode();
 
   if (isLoading) {
     return (
@@ -223,14 +221,12 @@ export const GraphScene = () => {
             width: 7,
             height: 7,
             borderRadius: '50%',
-            backgroundColor: is3DMode ? 'var(--spec-scifi)' : 'var(--aurora)',
-            boxShadow: is3DMode ? '0 0 12px var(--spec-scifi)' : '0 0 12px var(--aurora)',
+            backgroundColor: 'var(--aurora)',
+            boxShadow: '0 0 12px var(--aurora)',
             animation: 'celestial-pulse 2.6s ease-in-out infinite',
           }} />
           <span>
-            {is3DMode
-              ? 'projection · volumetric'
-              : `projection · planar${!hasWebGL ? ' · no-gl' : isMobile ? ' · handheld' : ''}`}
+            projection · celestial
           </span>
         </div>
 
