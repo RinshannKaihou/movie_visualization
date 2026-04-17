@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
+import { Application, BlurFilter, Container, Graphics, Sprite, Texture } from 'pixi.js';
+import type { Selection } from 'd3-selection';
 import { select } from 'd3-selection';
+import type { ZoomBehavior } from 'd3-zoom';
 import { zoom as d3Zoom, zoomIdentity, type D3ZoomEvent } from 'd3-zoom';
 import { useGraphStore } from '../stores/graphStore';
 import { useGraphFilters } from '../hooks/useGraphFilters';
@@ -42,10 +44,16 @@ const STAR_SCALE_MULTIPLIER = 6;
 
 interface SceneRefs {
   edgesLayer: Graphics;
+  focusedEdgesLayer: Graphics;
+  starSprites: Sprite[];
   nodeById: Map<number, MovieNode>;
   world: Container;
   hitIndex: HitIndex;
   canvas: HTMLCanvasElement;
+  canvasSelection: Selection<HTMLCanvasElement, unknown, null, undefined>;
+  d3zoom: ZoomBehavior<HTMLCanvasElement, unknown>;
+  viewportWidth: number;
+  viewportHeight: number;
 }
 
 // Pointer movement in screen pixels below which a pointerup is treated as
@@ -61,6 +69,48 @@ const HIT_RADIUS_MULTIPLIER = 1.5;
 // at STAGGER + FADE ≈ 1.6 s.
 const ENTRANCE_STAGGER_MS = 800;
 const ENTRANCE_FADE_MS = 800;
+
+// Focus animation constants.
+const FOCUS_TWEEN_MS = 700;
+// Non-connected stars dim to this alpha when a movie is focused.
+const FOCUS_DIM_ALPHA = 0.22;
+// Pixels of viewport padding around the focused neighborhood bbox.
+const FOCUS_BBOX_PADDING = 160;
+// Minimum zoom level the camera will settle on when a focused neighborhood
+// is very small; prevents zooming in absurdly close on isolated nodes.
+const FOCUS_MAX_ZOOM = 1.6;
+// Gaussian blur strength for the focused-edge bloom layer.
+const FOCUS_EDGE_BLUR = 3;
+
+// Simple rAF-driven tween runner. No dependency needed; used for star-alpha
+// fades and the camera neighborhood pan. Returns an abort function.
+const tween = (
+  durationMs: number,
+  onStep: (t: number) => void,
+  onDone?: () => void,
+): (() => void) => {
+  const start = performance.now();
+  let rafId = 0;
+  let cancelled = false;
+  const step = () => {
+    if (cancelled) return;
+    const raw = (performance.now() - start) / durationMs;
+    const t = raw >= 1 ? 1 : raw;
+    // easeOutCubic — fast departure, gentle settle.
+    const eased = 1 - Math.pow(1 - t, 3);
+    onStep(eased);
+    if (t >= 1) {
+      onDone?.();
+      return;
+    }
+    rafId = requestAnimationFrame(step);
+  };
+  rafId = requestAnimationFrame(step);
+  return () => {
+    cancelled = true;
+    cancelAnimationFrame(rafId);
+  };
+};
 
 /**
  * Rebuild the single edge Graphics from scratch. Pixi v8 has no in-place
@@ -108,6 +158,7 @@ export const StarfieldCanvas = () => {
 
   const nodes = useGraphStore(state => state.nodes);
   const selectMovie = useGraphStore(state => state.selectMovie);
+  const selectedMovie = useGraphStore(state => state.selectedMovie);
   const { visibleEdges } = useGraphFilters();
   const reducedMotion = useReducedMotion();
 
@@ -166,7 +217,8 @@ export const StarfieldCanvas = () => {
             setZoom(event.transform.k);
           });
         // Cast to HTMLElement because d3's canvas type selectors are picky.
-        const sel = select(app.canvas as HTMLCanvasElement);
+        const sel: Selection<HTMLCanvasElement, unknown, null, undefined> =
+          select(app.canvas as HTMLCanvasElement);
         sel.call(d3zoom);
         // Initial view: world-space origin at the screen center at k=1.
         sel.call(
@@ -178,6 +230,14 @@ export const StarfieldCanvas = () => {
         const edgesLayer = new Graphics();
         edgesLayer.blendMode = 'add';
         world.addChild(edgesLayer);
+
+        // --- focused edges (bloom layer for connected-movie edges) ------
+        // Separate Graphics with a BlurFilter so the bloom affects only
+        // the selected movie's connections, not the baseline web.
+        const focusedEdgesLayer = new Graphics();
+        focusedEdgesLayer.blendMode = 'add';
+        focusedEdgesLayer.filters = [new BlurFilter({ strength: FOCUS_EDGE_BLUR })];
+        world.addChild(focusedEdgesLayer);
 
         // --- stars --------------------------------------------------------
         const starsLayer = new Container();
@@ -250,10 +310,16 @@ export const StarfieldCanvas = () => {
 
         sceneRef.current = {
           edgesLayer,
+          focusedEdgesLayer,
+          starSprites,
           nodeById,
           world,
           hitIndex,
           canvas: app.canvas,
+          canvasSelection: sel,
+          d3zoom,
+          viewportWidth: app.screen.width,
+          viewportHeight: app.screen.height,
         };
         // Flip state so Effect 2 runs its first edge draw now that the
         // scene is populated. React batches this as a state update.
@@ -350,6 +416,141 @@ export const StarfieldCanvas = () => {
       canvas.removeEventListener('pointerleave', onLeave);
     };
   }, [nodes, selectMovie, sceneReady]);
+
+  // Effect 4: focus animation. When selectedMovie changes, dim non-connected
+  // stars, draw a bloomed overlay for the selected movie's edges, and pan
+  // the camera to frame the neighborhood. Deselection reverses the dim and
+  // clears the bloom; camera stays where the user left it.
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !sceneReady) return;
+
+    const {
+      focusedEdgesLayer,
+      starSprites,
+      nodeById,
+      canvasSelection,
+      d3zoom,
+      viewportWidth,
+      viewportHeight,
+    } = scene;
+
+    // Compute the ID set we want visible at full brightness.
+    const connectedIds = selectedMovie
+      ? new Set<number>([
+          selectedMovie.id,
+          ...useGraphStore.getState().getConnectedMovieIds(selectedMovie.id),
+        ])
+      : null;
+
+    // --- star alpha tween ------------------------------------------------
+    // Each sprite's target alpha is 1 when no focus, or when it is the
+    // selected movie or one of its connections. Otherwise dim.
+    // We need a sprite-index -> node-id mapping. The scene build insertion
+    // order matches `nodes.filter(n => n.x != null && n.y != null)`, so we
+    // cache that id list on the sprite array once per scene build.
+    type SpriteIdCache = Sprite[] & { __ids?: number[] };
+    const cache = starSprites as SpriteIdCache;
+    if (!cache.__ids) {
+      const ids: number[] = [];
+      for (const node of nodeById.values()) {
+        if (node.x != null && node.y != null) ids.push(node.id);
+      }
+      cache.__ids = ids;
+    }
+    const spriteIds = cache.__ids;
+    const startAlphas = starSprites.map(s => s.alpha);
+    const targetAlphas = starSprites.map((_, i) =>
+      !connectedIds || connectedIds.has(spriteIds[i]) ? 1 : FOCUS_DIM_ALPHA,
+    );
+
+    const cancelAlphaTween = reducedMotion
+      ? (() => {
+          for (let i = 0; i < starSprites.length; i++) starSprites[i].alpha = targetAlphas[i];
+          return () => {};
+        })()
+      : tween(FOCUS_TWEEN_MS, (eased) => {
+          for (let i = 0; i < starSprites.length; i++) {
+            starSprites[i].alpha = startAlphas[i] + (targetAlphas[i] - startAlphas[i]) * eased;
+          }
+        });
+
+    // --- focused-edge bloom ---------------------------------------------
+    focusedEdgesLayer.clear();
+    if (selectedMovie) {
+      // All edges touching the selected movie (already filter-aware).
+      const edges = useGraphStore.getState().getConnectedEdges(selectedMovie.id);
+      for (const e of edges) {
+        const srcId = typeof e.source === 'number' ? e.source : (e.source as MovieNode).id;
+        const tgtId = typeof e.target === 'number' ? e.target : (e.target as MovieNode).id;
+        const s = nodeById.get(srcId);
+        const t = nodeById.get(tgtId);
+        if (!s || !t || s.x == null || s.y == null || t.x == null || t.y == null) continue;
+        const color = hexToTintInt(getEdgeColor(e.types));
+        focusedEdgesLayer.moveTo(s.x, s.y);
+        focusedEdgesLayer.lineTo(t.x, t.y);
+        focusedEdgesLayer.stroke({ color, alpha: 0.9, width: 1.6 + e.strength * 0.5 });
+      }
+    }
+
+    // --- camera tween to neighborhood bbox ------------------------------
+    let cancelCameraTween: (() => void) | null = null;
+    if (selectedMovie && connectedIds) {
+      // Compute bbox of selected + connected in world coords.
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const id of connectedIds) {
+        const n = nodeById.get(id);
+        if (!n || n.x == null || n.y == null) continue;
+        if (n.x < minX) minX = n.x;
+        if (n.y < minY) minY = n.y;
+        if (n.x > maxX) maxX = n.x;
+        if (n.y > maxY) maxY = n.y;
+      }
+      if (isFinite(minX)) {
+        const bboxW = Math.max(maxX - minX, 1);
+        const bboxH = Math.max(maxY - minY, 1);
+        const availW = viewportWidth - FOCUS_BBOX_PADDING * 2;
+        const availH = viewportHeight - FOCUS_BBOX_PADDING * 2;
+        const targetK = Math.min(availW / bboxW, availH / bboxH, FOCUS_MAX_ZOOM);
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const targetX = viewportWidth / 2 - centerX * targetK;
+        const targetY = viewportHeight / 2 - centerY * targetK;
+        const targetTransform = zoomIdentity.translate(targetX, targetY).scale(targetK);
+
+        if (reducedMotion) {
+          canvasSelection.call(d3zoom.transform, targetTransform);
+        } else {
+          // Hand-rolled tween from the current d3-zoom transform to
+          // targetTransform. We interpolate the (x, y, k) triple and set
+          // it on d3-zoom each frame so the store's zoom value and the
+          // user's subsequent wheel/drag gestures stay consistent.
+          // Read current transform via the world container (kept in sync
+          // by the zoom handler).
+          const startX = scene.world.position.x;
+          const startY = scene.world.position.y;
+          const startK = scene.world.scale.x;
+          cancelCameraTween = tween(FOCUS_TWEEN_MS, (eased) => {
+            const nx = startX + (targetX - startX) * eased;
+            const ny = startY + (targetY - startY) * eased;
+            const nk = startK + (targetK - startK) * eased;
+            canvasSelection.call(
+              d3zoom.transform,
+              zoomIdentity.translate(nx, ny).scale(nk),
+            );
+          });
+        }
+      }
+    }
+
+    return () => {
+      cancelAlphaTween();
+      cancelCameraTween?.();
+    };
+  }, [selectedMovie, sceneReady, reducedMotion]);
 
   return (
     <>
