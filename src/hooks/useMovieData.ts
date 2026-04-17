@@ -19,14 +19,13 @@ const ensurePositions = async (
     && graphData.nodes.every(n => n.x != null && n.y != null);
   if (allPlaced) return graphData;
 
-  console.log('useMovieData: Positions missing; running layout worker...');
   const layoutStart = performance.now();
   const positions = await runLayoutInWorker(
     movies,
     graphData.links,
     { seed: 1, iterations: 300 },
   );
-  console.log(`useMovieData: Layout done in ${(performance.now() - layoutStart).toFixed(0)}ms`);
+  console.log(`Layout done in ${(performance.now() - layoutStart).toFixed(0)}ms`);
 
   return {
     nodes: graphData.nodes.map(n => {
@@ -58,7 +57,6 @@ export const useMovieData = () => {
 
   // Load data from static file, cache, or fetch from API
   const loadData = useCallback(async (forceRefresh: boolean = false) => {
-    console.log('useMovieData: loadData called, forceRefresh:', forceRefresh);
     setLoading(true);
     setError(null);
     setProgress(undefined);
@@ -67,10 +65,8 @@ export const useMovieData = () => {
     try {
       // Priority 1: Try static JSON file (for deployed version without API key)
       if (!forceRefresh) {
-        console.log('useMovieData: Checking for static data...');
         const staticData = await loadStaticData();
         if (staticData) {
-          console.log('useMovieData: Using static data');
           const placed = await ensurePositions(staticData.movies, staticData.graphData);
           setMovies(staticData.movies);
           setGraphData(placed);
@@ -82,10 +78,8 @@ export const useMovieData = () => {
 
       // Priority 2: Try to load from IndexedDB cache
       if (!forceRefresh) {
-        console.log('useMovieData: Checking cache...');
         const cached = await loadGraphData();
         if (cached) {
-          console.log('useMovieData: Found cached data, movies:', cached.movies.length);
           const placed = await ensurePositions(cached.movies, cached.graphData);
           setMovies(cached.movies);
           setGraphData(placed);
@@ -95,19 +89,14 @@ export const useMovieData = () => {
       }
 
       // Priority 3: Fetch from TMDB API (requires API key)
-      console.log('useMovieData: Fetching from TMDB API...');
       setProgress({ loaded: 0, total: 2000 });
 
       const fetchedMovies = await fetchMoviesWithDetails(2000, (loaded, total) => {
-        console.log(`useMovieData: Progress: ${loaded}/${total}`);
         setProgress({ loaded, total });
       });
 
-      console.log('useMovieData: Fetched movies:', fetchedMovies.length);
-
       // Build graph data (no positions yet — ensurePositions will run the worker)
       const graphData = buildGraphData(fetchedMovies);
-      console.log('useMovieData: Built graph data, nodes:', graphData.nodes.length, 'links:', graphData.links.length);
 
       const placedGraph = await ensurePositions(fetchedMovies, graphData);
 
@@ -117,13 +106,11 @@ export const useMovieData = () => {
       // Update state
       setMovies(fetchedMovies);
       setGraphData(placedGraph);
-      console.log('useMovieData: State updated successfully');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load movie data';
       console.error('useMovieData: Error:', err);
       setError(message);
     } finally {
-      console.log('useMovieData: Setting loading to false');
       setLoading(false);
       setProgress(undefined);
     }
@@ -138,7 +125,6 @@ export const useMovieData = () => {
 
   // Load data on mount
   useEffect(() => {
-    console.log('useMovieData: useEffect running, calling loadData');
     loadData();
   }, [loadData]);
 

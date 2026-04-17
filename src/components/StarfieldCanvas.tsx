@@ -834,11 +834,14 @@ export const StarfieldCanvas = () => {
   // Effect 6: pause Pixi ticker after 1s idle to save battery.
   // Re-wakes on any pointer/wheel/pointerdown event. Skips pausing
   // while a movie is selected — photons need the ticker to animate.
+  // A timestamp guard prevents pausing during the entrance animation
+  // (~1.6s from scene build), since stars start at alpha 0.
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !sceneReady) return;
 
     const { app, canvas } = scene;
+    const safeAfter = performance.now() + ENTRANCE_STAGGER_MS + ENTRANCE_FADE_MS;
     let idleTimer: number | null = null;
 
     const wake = () => {
@@ -846,15 +849,16 @@ export const StarfieldCanvas = () => {
       if (idleTimer != null) window.clearTimeout(idleTimer);
       // Guard: do not schedule pause while photons are flowing.
       if (useGraphStore.getState().selectedMovie) return;
-      idleTimer = window.setTimeout(() => app.ticker.stop(), 1000);
+      idleTimer = window.setTimeout(() => {
+        // Entrance may still be running; reschedule instead of pausing.
+        if (performance.now() < safeAfter) { wake(); return; }
+        app.ticker.stop();
+      }, 1000);
     };
 
     canvas.addEventListener('pointermove', wake);
     canvas.addEventListener('wheel', wake);
     canvas.addEventListener('pointerdown', wake);
-
-    // Initial wake to start the idle clock.
-    wake();
 
     return () => {
       canvas.removeEventListener('pointermove', wake);
