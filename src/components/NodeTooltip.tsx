@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { MovieNode } from '../types';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface NodeTooltipProps {
   node: MovieNode | null;
@@ -7,6 +8,7 @@ interface NodeTooltipProps {
 
 export const NodeTooltip = ({ node }: NodeTooltipProps) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const reducedMotion = useReducedMotion();
 
   // Visibility derives directly from `node` — no separate state needed.
   // The tooltip is rendered whenever node is non-null; unmount/mount
@@ -51,7 +53,7 @@ export const NodeTooltip = ({ node }: NodeTooltipProps) => {
         top: position.y,
         zIndex: 1000,
         pointerEvents: 'none',
-        animation: 'tooltipFadeIn 180ms cubic-bezier(0.2, 0.9, 0.3, 1)',
+        animation: reducedMotion ? 'none' : 'tooltipFadeIn 180ms cubic-bezier(0.2, 0.9, 0.3, 1)',
       }}
     >
       <div
