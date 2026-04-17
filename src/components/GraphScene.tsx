@@ -1,4 +1,3 @@
-import { MovieGraph } from './MovieGraph';
 import { StarfieldCanvas } from './StarfieldCanvas';
 import { FilterPanel } from './FilterPanel';
 import { GenreLegend } from './GenreLegend';
@@ -9,12 +8,6 @@ import { LoadingScreen, ErrorScreen } from './LoadingScreen';
 import { StardustField } from './StardustField';
 import { useMovieData } from '../hooks/useMovieData';
 import { useGraphMode } from '../hooks/useGraphMode';
-
-// Stage 2 feature flag — when true, render the new Pixi WebGL canvas
-// instead of the legacy react-force-graph one. Flip via VITE_USE_PIXI in
-// .env. Stage 3 removes this branch and makes StarfieldCanvas the only
-// renderer.
-const usePixiRenderer = import.meta.env.VITE_USE_PIXI === 'true';
 
 export const GraphScene = () => {
   const { isLoading, error, refreshData, progress, usingStaticData } = useMovieData();
@@ -71,7 +64,7 @@ export const GraphScene = () => {
       <StardustField />
 
       {/* ─── Main graph (stars & gossamer threads) ─── */}
-      {usePixiRenderer ? <StarfieldCanvas /> : <MovieGraph />}
+      <StarfieldCanvas />
 
       {/* ─── Vignette for focus ─── */}
       <div style={{
