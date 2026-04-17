@@ -36,29 +36,10 @@ export const GraphScene = () => {
       overflow: 'hidden',
       fontFamily: 'var(--font-ui)',
     }}>
-      {/* ─── Deep nebula gradient cloud ─── */}
-      <div style={{
-        position: 'absolute',
-        inset: 0,
-        background: `
-          radial-gradient(ellipse 80% 60% at 18% 72%, rgba(120, 60, 180, 0.22) 0%, transparent 55%),
-          radial-gradient(ellipse 65% 55% at 82% 22%, rgba(220, 70, 130, 0.16) 0%, transparent 55%),
-          radial-gradient(ellipse 50% 45% at 65% 80%, rgba(110, 220, 255, 0.10) 0%, transparent 60%),
-          radial-gradient(ellipse 40% 35% at 28% 28%, rgba(255, 180, 110, 0.08) 0%, transparent 60%)
-        `,
-        animation: 'nebula-pan 32s ease-in-out infinite',
-        pointerEvents: 'none',
-      }} />
-
-      {/* ─── Fine film grain overlay ─── */}
-      <div style={{
-        position: 'absolute',
-        inset: 0,
-        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-        opacity: 0.18,
-        mixBlendMode: 'overlay',
-        pointerEvents: 'none',
-      }} />
+      {/* Nebula backdrop moved into the Pixi scene (StarfieldCanvas). The
+          CSS radial-gradient stack + SVG film-grain overlay have been
+          replaced with a GPU-uploaded FBM noise texture — richer and
+          cheaper. See src/services/nebulaTexture.ts. */}
 
       {/* ─── Distant background stars ─── */}
       <StardustField />

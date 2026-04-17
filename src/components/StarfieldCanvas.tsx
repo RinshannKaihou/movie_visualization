@@ -5,6 +5,7 @@ import { zoom as d3Zoom, zoomIdentity, type D3ZoomEvent } from 'd3-zoom';
 import { useGraphStore } from '../stores/graphStore';
 import { useGraphFilters } from '../hooks/useGraphFilters';
 import { buildHaloBitmap, hexToTintInt } from '../services/textures';
+import { buildNebulaBitmap } from '../services/nebulaTexture';
 import { buildHitIndex, type HitIndex } from '../services/hitTest';
 import { getEdgeColor, getNodeColor, getNodeSize } from '../services/graphBuilder';
 import { NodeTooltip } from './NodeTooltip';
@@ -127,6 +128,19 @@ export const StarfieldCanvas = () => {
         host.appendChild(app.canvas);
 
         const haloTex = Texture.from(buildHaloBitmap(HALO_SIZE));
+
+        // --- nebula backdrop --------------------------------------------
+        // Sits on the stage directly, BEHIND the world container, so the
+        // nebula does not scroll along with pan/zoom. Size is chosen once;
+        // we center it on the viewport. Subtle drift handled in Task 4.8
+        // (parallax) — here the nebula is static.
+        const nebulaTex = Texture.from(buildNebulaBitmap(2048, 1024));
+        const nebula = new Sprite(nebulaTex);
+        nebula.anchor.set(0.5);
+        nebula.alpha = 0.55;
+        nebula.x = app.screen.width / 2;
+        nebula.y = app.screen.height / 2;
+        app.stage.addChild(nebula);
 
         const world = new Container();
         app.stage.addChild(world);
