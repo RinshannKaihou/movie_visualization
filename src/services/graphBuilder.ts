@@ -223,12 +223,13 @@ export const buildGraphData = (movies: Movie[]): GraphData => {
   return { nodes, links: edges };
 };
 
-// Gravitational (edge) colors — threads of light between bodies
+// Gravitational (edge) colors — muted so edges read as structure
+// rather than competing light sources.
 const GRAV_COLORS: Record<ConnectionType, string> = {
-  same_actor:    '#ffb066', // ember
-  same_director: '#7ba2ff', // periwinkle
-  same_genre:    '#7cffd4', // aurora
-  similar_plot:  '#b68cff', // violet
+  same_actor:    '#c9a06c', // warm amber
+  same_director: '#6a9ec4', // muted blue
+  same_genre:    '#6dbfa8', // muted teal
+  similar_plot:  '#9e8ec4', // muted violet
 };
 
 // Get edge color based on connection types
@@ -236,34 +237,40 @@ export const getEdgeColor = (types: ConnectionType[]): string => {
   return GRAV_COLORS[types[0]] || '#8891a6';
 };
 
-// Spectral class → each genre is assigned a star color mapped to
-// real stellar classification (O/B/A/F/G/K/M + peculiar classes).
-// These are intentionally warmer and softer than the previous
-// hyper-saturated palette so many stars can coexist on one sky.
+// Harmonized genre palette — 6 color families for visual coherence.
+// Grouped by thematic temperature so overlapping nodes don't create
+// rainbow chaos. Each family is muted and sits comfortably on dark.
 export const SPECTRAL_COLORS: Record<string, string> = {
-  'Drama':       '#ffd27a', // G-type sun-amber
-  'Action':      '#ff5a3d', // M-type red giant
-  'Sci-Fi':      '#6edcff', // B-type blue
-  'Comedy':      '#ffe96b', // F-type yellow
-  'Thriller':    '#b68cff', // peculiar violet
-  'Horror':      '#d8344a', // carbon-star crimson
-  'Romance':     '#ff8fc4', // rose dwarf
-  'Animation':   '#8cf2c5', // cyan-green
-  'Documentary': '#9aa8ff', // faint giant
-  'Adventure':   '#ffb066', // ember orange
-  'Crime':       '#8891a6', // cool gray-blue
-  'Fantasy':     '#a57bff', // lilac
-  'Mystery':     '#7ba2ff', // periwinkle
-  'War':         '#b37a4a', // rust
+  // Warm — Action, Adventure, War
+  'Action':      '#e8a858',
+  'Adventure':   '#e8a858',
+  'War':         '#e8a858',
+  // Cool — Sci-Fi, Fantasy, Mystery
+  'Sci-Fi':      '#5ab8d4',
+  'Fantasy':     '#5ab8d4',
+  'Mystery':     '#5ab8d4',
+  // Dramatic — Drama, Crime, Thriller
+  'Drama':       '#9a7bb8',
+  'Crime':       '#9a7bb8',
+  'Thriller':    '#9a7bb8',
+  // Light — Comedy, Romance, Animation
+  'Comedy':      '#e8d47a',
+  'Romance':     '#e8d47a',
+  'Animation':   '#e8d47a',
+  // Dark — Horror, Documentary
+  'Horror':      '#8a8a9e',
+  'Documentary': '#8a8a9e',
+  // Default
+  'default':     '#a8aab8',
 };
 
 // Get node color based on primary genre
 export const getNodeColor = (genres: string[]): string => {
-  return SPECTRAL_COLORS[genres[0]] || '#bcbfd0';
+  return SPECTRAL_COLORS[genres[0]] || SPECTRAL_COLORS['default'];
 };
 
-// Calculate node size based on rating
-// Scale rating (0-10) to star magnitude (4.5 - 13)
+// Calculate node radius based on rating
+// Scale rating (0-10) to radius (3 - 10) for crisp constellation dots
 export const getNodeSize = (rating: number): number => {
-  return 4.5 + (rating / 10) * 8.5;
+  return 3 + (rating / 10) * 7;
 };

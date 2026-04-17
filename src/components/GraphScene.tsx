@@ -33,10 +33,9 @@ export const GraphScene = () => {
       overflow: 'hidden',
       fontFamily: 'var(--font-ui)',
     }}>
-      {/* Nebula backdrop moved into the Pixi scene (StarfieldCanvas). The
-          CSS radial-gradient stack + SVG film-grain overlay have been
-          replaced with a GPU-uploaded FBM noise texture — richer and
-          cheaper. See src/services/nebulaTexture.ts. */}
+      {/* Background is a clean radial gradient + subtle static stars
+          rendered by StarfieldCanvas. The old nebula/stardust effects
+          have been removed for visual clarity. */}
 
       {/* ─── Main graph (stars & gossamer threads) ─── */}
       <StarfieldCanvas />

@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { buildHaloBitmap, hexToTintInt } from './textures';
+import { buildGlowBitmap, hexToTintInt } from './textures';
 
-describe('buildHaloBitmap', () => {
+describe('buildGlowBitmap', () => {
   it('returns a canvas of the requested size', () => {
-    const canvas = buildHaloBitmap(128);
-    expect(canvas.width).toBe(128);
-    expect(canvas.height).toBe(128);
+    const canvas = buildGlowBitmap(64);
+    expect(canvas.width).toBe(64);
+    expect(canvas.height).toBe(64);
   });
 
   it('center pixel alpha is max, corner alpha is ~0', () => {
-    const canvas = buildHaloBitmap(64);
+    const canvas = buildGlowBitmap(64);
     const ctx = canvas.getContext('2d')!;
     const center = ctx.getImageData(32, 32, 1, 1).data[3];
     const corner = ctx.getImageData(0, 0, 1, 1).data[3];
@@ -18,7 +18,7 @@ describe('buildHaloBitmap', () => {
   });
 
   it('alpha falls off monotonically from center to edge along a row', () => {
-    const canvas = buildHaloBitmap(64);
+    const canvas = buildGlowBitmap(64);
     const ctx = canvas.getContext('2d')!;
     const row = ctx.getImageData(32, 32, 32, 1).data;
     // Sample every 4 pixels (each RGBA quad = 4 bytes).

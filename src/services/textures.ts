@@ -8,28 +8,27 @@
  * we can unit-test bitmap invariants without mocking WebGL.
  */
 
-// --- halo sprite ----------------------------------------------------------
+// --- glow sprite ----------------------------------------------------------
 
 /**
- * True Gaussian halo on white. Consumers tint via `sprite.tint` at render
+ * Tight Gaussian glow on white. Consumers tint via `sprite.tint` at render
  * time, so we emit pure white RGB and encode the falloff in alpha only.
  *
- * The formula is `alpha = exp(-(r/σ)² / 2)` with σ = half/2.2, chosen so
- * the halo fades to ≤ 2% alpha at the canvas edge — the corner pixels
- * stay effectively black, avoiding a visible sprite boundary when many
- * halos overlap under additive blending.
+ * The formula is `alpha = exp(-(r/σ)² / 2)` with σ = half/1.8, chosen so
+ * the glow fades to ≤ 5% alpha at the canvas edge — a much tighter falloff
+ * than the old halo so overlapping glows don't create a mosaic mess.
  *
- * Cost: one `exp()` per pixel. 256×256 runs in ~5 ms on a laptop. Called
+ * Cost: one `exp()` per pixel. 64×64 runs in ~1 ms on a laptop. Called
  * once at app init; the texture lives for the app lifetime.
  */
-export const buildHaloBitmap = (size: number): HTMLCanvasElement => {
+export const buildGlowBitmap = (size: number): HTMLCanvasElement => {
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
   const img = ctx.createImageData(size, size);
   const half = size / 2;
-  const sigma = half / 2.2;
+  const sigma = half / 1.8;
   const inv2Sig2 = 1 / (2 * sigma * sigma);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -53,7 +52,7 @@ export const buildHaloBitmap = (size: number): HTMLCanvasElement => {
  * Convert a #rrggbb (or #rgb, or bare hex) string to a 24-bit integer
  * suitable for `sprite.tint`. Pixi's tint pipeline multiplies this value
  * against the texture's white RGB at shade time, so we can reuse a
- * single white halo across every genre.
+ * single white glow across every genre.
  */
 export const hexToTintInt = (hex: string): number => {
   const h = hex.replace('#', '');
