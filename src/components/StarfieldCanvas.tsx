@@ -42,9 +42,23 @@ const HALO_SIZE = 256;
 // intended star radius.
 const STAR_SCALE_MULTIPLIER = 6;
 
+interface PhotonState {
+  sprite: Sprite;
+  srcX: number;
+  srcY: number;
+  tgtX: number;
+  tgtY: number;
+  // Color matches edge type; set once per photon.
+  color: number;
+  // Progress along the edge in [0, 1). Wraps at 1.
+  t: number;
+}
+
 interface SceneRefs {
   edgesLayer: Graphics;
   focusedEdgesLayer: Graphics;
+  photonsLayer: Container;
+  photonTex: Texture;
   starSprites: Sprite[];
   nodeById: Map<number, MovieNode>;
   world: Container;
@@ -54,6 +68,7 @@ interface SceneRefs {
   d3zoom: ZoomBehavior<HTMLCanvasElement, unknown>;
   viewportWidth: number;
   viewportHeight: number;
+  app: Application;
 }
 
 // Pointer movement in screen pixels below which a pointerup is treated as
@@ -81,6 +96,14 @@ const FOCUS_BBOX_PADDING = 160;
 const FOCUS_MAX_ZOOM = 1.6;
 // Gaussian blur strength for the focused-edge bloom layer.
 const FOCUS_EDGE_BLUR = 3;
+// Number of strongest edges from the focused movie that emit photons.
+const PHOTON_EDGE_COUNT = 3;
+// Per-photon advance per ms along the (source -> target) segment.
+// At 0.0005 a photon crosses an edge in 2s; three photons per edge spaced
+// evenly at 0.33 phase gives a "beads on a string" effect.
+const PHOTON_SPEED = 0.0005;
+const PHOTONS_PER_EDGE = 3;
+const PHOTON_SCALE = 0.14;
 
 // Simple rAF-driven tween runner. No dependency needed; used for star-alpha
 // fades and the camera neighborhood pan. Returns an abort function.
@@ -239,6 +262,13 @@ export const StarfieldCanvas = () => {
         focusedEdgesLayer.filters = [new BlurFilter({ strength: FOCUS_EDGE_BLUR })];
         world.addChild(focusedEdgesLayer);
 
+        // --- photon layer (focused-only beads flowing along strong edges) -
+        // Reuses the halo texture at a tiny scale so photons share the
+        // GPU batch with the star sprites. Populated/drained by Effect 4.
+        const photonsLayer = new Container();
+        world.addChild(photonsLayer);
+        const photonTex = haloTex;
+
         // --- stars --------------------------------------------------------
         const starsLayer = new Container();
         world.addChild(starsLayer);
@@ -311,6 +341,8 @@ export const StarfieldCanvas = () => {
         sceneRef.current = {
           edgesLayer,
           focusedEdgesLayer,
+          photonsLayer,
+          photonTex,
           starSprites,
           nodeById,
           world,
@@ -320,6 +352,7 @@ export const StarfieldCanvas = () => {
           d3zoom,
           viewportWidth: app.screen.width,
           viewportHeight: app.screen.height,
+          app,
         };
         // Flip state so Effect 2 runs its first edge draw now that the
         // scene is populated. React batches this as a state update.
@@ -427,12 +460,15 @@ export const StarfieldCanvas = () => {
 
     const {
       focusedEdgesLayer,
+      photonsLayer,
+      photonTex,
       starSprites,
       nodeById,
       canvasSelection,
       d3zoom,
       viewportWidth,
       viewportHeight,
+      app,
     } = scene;
 
     // Compute the ID set we want visible at full brightness.
@@ -475,11 +511,16 @@ export const StarfieldCanvas = () => {
           }
         });
 
-    // --- focused-edge bloom ---------------------------------------------
+    // --- focused-edge bloom + photons -----------------------------------
     focusedEdgesLayer.clear();
+    // Tear down any previous photons — they belonged to the prior focus.
+    for (const child of photonsLayer.children) child.destroy();
+    photonsLayer.removeChildren();
+    const photons: PhotonState[] = [];
+
     if (selectedMovie) {
-      // All edges touching the selected movie (already filter-aware).
       const edges = useGraphStore.getState().getConnectedEdges(selectedMovie.id);
+      // Render the full bloomed edge set.
       for (const e of edges) {
         const srcId = typeof e.source === 'number' ? e.source : (e.source as MovieNode).id;
         const tgtId = typeof e.target === 'number' ? e.target : (e.target as MovieNode).id;
@@ -491,6 +532,59 @@ export const StarfieldCanvas = () => {
         focusedEdgesLayer.lineTo(t.x, t.y);
         focusedEdgesLayer.stroke({ color, alpha: 0.9, width: 1.6 + e.strength * 0.5 });
       }
+
+      // Seed photons on the top-N strongest connected edges. Each edge gets
+      // PHOTONS_PER_EDGE photons phase-offset so they feel continuous.
+      const strongest = [...edges]
+        .sort((a, b) => b.strength - a.strength)
+        .slice(0, PHOTON_EDGE_COUNT);
+      for (const e of strongest) {
+        const srcId = typeof e.source === 'number' ? e.source : (e.source as MovieNode).id;
+        const tgtId = typeof e.target === 'number' ? e.target : (e.target as MovieNode).id;
+        const s = nodeById.get(srcId);
+        const t = nodeById.get(tgtId);
+        if (!s || !t || s.x == null || s.y == null || t.x == null || t.y == null) continue;
+        const color = hexToTintInt(getEdgeColor(e.types));
+        // Direction: photons always flow from the selected movie outward.
+        const outward = srcId === selectedMovie.id
+          ? { ax: s.x, ay: s.y, bx: t.x, by: t.y }
+          : { ax: t.x, ay: t.y, bx: s.x, by: s.y };
+        for (let k = 0; k < PHOTONS_PER_EDGE; k++) {
+          const sprite = new Sprite(photonTex);
+          sprite.anchor.set(0.5);
+          sprite.tint = color;
+          sprite.blendMode = 'add';
+          sprite.scale.set(PHOTON_SCALE);
+          photonsLayer.addChild(sprite);
+          photons.push({
+            sprite,
+            srcX: outward.ax,
+            srcY: outward.ay,
+            tgtX: outward.bx,
+            tgtY: outward.by,
+            color,
+            t: (k / PHOTONS_PER_EDGE) % 1,
+          });
+        }
+      }
+    }
+
+    // Ticker advances every photon each frame. Callback removes itself
+    // when the photon array is empty (on deselect).
+    let photonTick: ((ticker: { deltaMS: number }) => void) | null = null;
+    if (photons.length > 0) {
+      photonTick = (ticker: { deltaMS: number }) => {
+        for (const p of photons) {
+          p.t = (p.t + PHOTON_SPEED * ticker.deltaMS) % 1;
+          p.sprite.x = p.srcX + (p.tgtX - p.srcX) * p.t;
+          p.sprite.y = p.srcY + (p.tgtY - p.srcY) * p.t;
+          // Fade in the first 15% and fade out the last 15% so photons
+          // don't pop in/out at the endpoints.
+          const fade = p.t < 0.15 ? p.t / 0.15 : p.t > 0.85 ? (1 - p.t) / 0.15 : 1;
+          p.sprite.alpha = fade;
+        }
+      };
+      app.ticker.add(photonTick);
     }
 
     // --- camera tween to neighborhood bbox ------------------------------
@@ -549,6 +643,8 @@ export const StarfieldCanvas = () => {
     return () => {
       cancelAlphaTween();
       cancelCameraTween?.();
+      if (photonTick) app.ticker.remove(photonTick);
+      for (const p of photons) p.sprite.destroy();
     };
   }, [selectedMovie, sceneReady, reducedMotion]);
 
