@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
+import { select } from 'd3-selection';
+import { zoom as d3Zoom, zoomIdentity, type D3ZoomEvent } from 'd3-zoom';
 import { useGraphStore } from '../stores/graphStore';
 import { useGraphFilters } from '../hooks/useGraphFilters';
 import { buildHaloBitmap, hexToTintInt } from '../services/textures';
@@ -109,9 +111,28 @@ export const StarfieldCanvas = () => {
         const haloTex = Texture.from(buildHaloBitmap(HALO_SIZE));
 
         const world = new Container();
-        world.x = app.screen.width / 2;
-        world.y = app.screen.height / 2;
         app.stage.addChild(world);
+
+        // --- pan / zoom via d3-zoom --------------------------------------
+        // d3-zoom dispatches a transform { x, y, k } on drag + wheel + pinch.
+        // We copy it onto the `world` container so every layer inside pans
+        // and zooms together. Store sync lets Stage 4 LOD read current zoom.
+        const setZoom = useGraphStore.getState().setZoom;
+        const d3zoom = d3Zoom<HTMLCanvasElement, unknown>()
+          .scaleExtent([0.15, 6])
+          .on('zoom', (event: D3ZoomEvent<HTMLCanvasElement, unknown>) => {
+            world.position.set(event.transform.x, event.transform.y);
+            world.scale.set(event.transform.k);
+            setZoom(event.transform.k);
+          });
+        // Cast to HTMLElement because d3's canvas type selectors are picky.
+        const sel = select(app.canvas as HTMLCanvasElement);
+        sel.call(d3zoom);
+        // Initial view: world-space origin at the screen center at k=1.
+        sel.call(
+          d3zoom.transform,
+          zoomIdentity.translate(app.screen.width / 2, app.screen.height / 2).scale(1),
+        );
 
         // --- edges (rendered first, behind stars) ------------------------
         const edgesLayer = new Graphics();

@@ -22,6 +22,10 @@ interface GraphState {
   // Graph mode
   is3DMode: boolean;
 
+  // Viewport (Pixi renderer only — Stage 2.9). The LOD helpers in
+  // services/viewport.ts read this at render time.
+  zoom: number;
+
   // Actions
   setMovies: (movies: Movie[]) => void;
   setGraphData: (data: GraphData) => void;
@@ -34,6 +38,7 @@ interface GraphState {
   setLoadingDetails: (loading: boolean) => void;
   setError: (error: string | null) => void;
   set3DMode: (is3D: boolean) => void;
+  setZoom: (zoom: number) => void;
 
   // Computed getters
   getFilteredEdges: () => MovieEdge[];
@@ -55,6 +60,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isLoadingDetails: false,
   error: null,
   is3DMode: true,
+  zoom: 1,
 
   // Actions
   setMovies: (movies) => set({ movies }),
@@ -106,6 +112,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   setError: (error) => set({ error }),
 
   set3DMode: (is3D) => set({ is3DMode: is3D }),
+
+  setZoom: (zoom) => set({ zoom }),
 
   // Computed getters
   getFilteredEdges: () => {
