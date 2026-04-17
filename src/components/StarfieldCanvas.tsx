@@ -97,6 +97,18 @@ const FOCUS_BBOX_PADDING = 160;
 const FOCUS_MAX_ZOOM = 1.6;
 // Gaussian blur strength for the focused-edge bloom layer.
 const FOCUS_EDGE_BLUR = 3;
+// Twinkle amplitude (peak deviation from the sprite's base alpha). Kept
+// small so the effect reads as "alive" rather than "strobing". Together
+// with TWINKLE_SPEED the motion averages out to a gentle breathing.
+const TWINKLE_AMPLITUDE = 0.06;
+const TWINKLE_SPEED = 0.0009; // radians per ms; period ≈ 7s at phase 0
+
+// Sprites carry an extra `__baseAlpha` numeric so entrance, focus-dim, and
+// twinkle can layer: entrance writes sprite.alpha directly during the
+// fade-in; focus-dim writes __baseAlpha; twinkle multiplies
+// sprite.alpha = __baseAlpha * twinkleFactor each frame.
+type StarSpriteExtra = Sprite & { __baseAlpha?: number; __twinklePhase?: number };
+
 // Number of strongest edges from the focused movie that emit photons.
 const PHOTON_EDGE_COUNT = 3;
 // Per-photon advance per ms along the (source -> target) segment.
@@ -293,7 +305,7 @@ export const StarfieldCanvas = () => {
           if (node.x == null || node.y == null) continue;
           nodeById.set(node.id, node);
 
-          const sprite = new Sprite(haloTex);
+          const sprite: StarSpriteExtra = new Sprite(haloTex);
           sprite.anchor.set(0.5);
           const radius = getNodeSize(node.rating);
           const drawDiameter = radius * STAR_SCALE_MULTIPLIER;
@@ -303,6 +315,9 @@ export const StarfieldCanvas = () => {
           sprite.x = node.x;
           sprite.y = node.y;
           sprite.alpha = reducedMotion ? 1 : 0;
+          // Focus effect uses __baseAlpha; twinkle multiplies against it.
+          sprite.__baseAlpha = 1;
+          sprite.__twinklePhase = Math.random() * Math.PI * 2;
           starsLayer.addChild(sprite);
           starSprites.push(sprite);
           starBirthDelays.push(Math.random() * ENTRANCE_STAGGER_MS);
@@ -310,7 +325,8 @@ export const StarfieldCanvas = () => {
 
         // --- entrance animation -----------------------------------------
         // Skip entirely under prefers-reduced-motion: sprites are already
-        // full-alpha and no ticker cost is incurred.
+        // full-alpha and no ticker cost is incurred. Twinkle also skips
+        // under reducedMotion.
         if (!reducedMotion) {
           const startMs = performance.now();
           const entranceTick = () => {
@@ -330,7 +346,24 @@ export const StarfieldCanvas = () => {
                 stillAnimating = true;
               }
             }
-            if (!stillAnimating) app.ticker.remove(entranceTick);
+            if (!stillAnimating) {
+              app.ticker.remove(entranceTick);
+              // Hand off to the twinkle ticker. It reads __baseAlpha
+              // (set by scene build and updated by the focus effect) and
+              // multiplies by a gentle per-star sinusoid.
+              const twinkleTick = (ticker: { lastTime: number }) => {
+                const t2 = ticker.lastTime;
+                for (let i = 0; i < starSprites.length; i++) {
+                  const sprite = starSprites[i] as StarSpriteExtra;
+                  const base = sprite.__baseAlpha ?? 1;
+                  const phase = sprite.__twinklePhase ?? 0;
+                  const wobble = 1 - TWINKLE_AMPLITUDE
+                    + Math.sin(t2 * TWINKLE_SPEED + phase) * TWINKLE_AMPLITUDE;
+                  sprite.alpha = base * wobble;
+                }
+              };
+              app.ticker.add(twinkleTick);
+            }
           };
           app.ticker.add(entranceTick);
         }
@@ -506,19 +539,27 @@ export const StarfieldCanvas = () => {
       cache.__ids = ids;
     }
     const spriteIds = cache.__ids;
-    const startAlphas = starSprites.map(s => s.alpha);
-    const targetAlphas = starSprites.map((_, i) =>
+    // Focus tweens __baseAlpha, not sprite.alpha. Twinkle ticker multiplies
+    // __baseAlpha by a wobble each frame; under reducedMotion (twinkle off)
+    // we also write alpha so the dim is visible without a ticker.
+    const startBaseAlphas = starSprites.map(s => (s as StarSpriteExtra).__baseAlpha ?? 1);
+    const targetBaseAlphas = starSprites.map((_, i) =>
       !connectedIds || connectedIds.has(spriteIds[i]) ? 1 : FOCUS_DIM_ALPHA,
     );
 
     const cancelAlphaTween = reducedMotion
       ? (() => {
-          for (let i = 0; i < starSprites.length; i++) starSprites[i].alpha = targetAlphas[i];
+          for (let i = 0; i < starSprites.length; i++) {
+            const s = starSprites[i] as StarSpriteExtra;
+            s.__baseAlpha = targetBaseAlphas[i];
+            s.alpha = targetBaseAlphas[i];
+          }
           return () => {};
         })()
       : tween(FOCUS_TWEEN_MS, (eased) => {
           for (let i = 0; i < starSprites.length; i++) {
-            starSprites[i].alpha = startAlphas[i] + (targetAlphas[i] - startAlphas[i]) * eased;
+            const s = starSprites[i] as StarSpriteExtra;
+            s.__baseAlpha = startBaseAlphas[i] + (targetBaseAlphas[i] - startBaseAlphas[i]) * eased;
           }
         });
 
