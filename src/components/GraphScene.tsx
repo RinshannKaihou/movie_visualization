@@ -5,7 +5,6 @@ import { MovieDetailsPanel } from './MovieDetailsPanel';
 import { SearchBar } from './SearchBar';
 import { ExportDataButton } from './ExportDataButton';
 import { LoadingScreen, ErrorScreen } from './LoadingScreen';
-import { StardustField } from './StardustField';
 import { useMovieData } from '../hooks/useMovieData';
 import { useGraphMode } from '../hooks/useGraphMode';
 
@@ -40,9 +39,6 @@ export const GraphScene = () => {
           CSS radial-gradient stack + SVG film-grain overlay have been
           replaced with a GPU-uploaded FBM noise texture — richer and
           cheaper. See src/services/nebulaTexture.ts. */}
-
-      {/* ─── Distant background stars ─── */}
-      <StardustField />
 
       {/* ─── Main graph (stars & gossamer threads) ─── */}
       <StarfieldCanvas />

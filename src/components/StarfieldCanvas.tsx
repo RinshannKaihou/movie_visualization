@@ -265,6 +265,48 @@ export const StarfieldCanvas = () => {
         nebula.y = app.screen.height / 2;
         app.stage.addChild(nebula);
 
+        // --- stardust field (tiny background stars, static behind world) ---
+        // Replaces the standalone StardustField canvas. Uses the same halo
+        // texture at tiny scale so stardust shares the GPU batch with stars.
+        const dustTex = Texture.from(buildHaloBitmap(32));
+        const stardustLayer = new Container();
+        app.stage.addChildAt(stardustLayer, app.stage.getChildIndex(nebula) + 1);
+        const STARDUST_DENSITY = 1 / 8000;
+        const stardustCount = Math.min(
+          Math.floor(app.screen.width * app.screen.height * STARDUST_DENSITY),
+          500,
+        );
+        const dustSprites: StarSpriteExtra[] = [];
+        for (let i = 0; i < stardustCount; i++) {
+          const s: StarSpriteExtra = new Sprite(dustTex);
+          s.anchor.set(0.5);
+          s.blendMode = 'add';
+          s.scale.set(0.08 + Math.random() * 0.15);
+          s.__baseAlpha = 0.3 + Math.random() * 0.5;
+          s.alpha = s.__baseAlpha;
+          s.__twinklePhase = Math.random() * Math.PI * 2;
+          s.x = Math.random() * app.screen.width;
+          s.y = Math.random() * app.screen.height;
+          stardustLayer.addChild(s);
+          dustSprites.push(s);
+        }
+
+        if (!reducedMotion && dustSprites.length > 0) {
+          const dustTwinkleSpeed = 0.0004; // slower than main stars
+          const dustTick = (ticker: { lastTime: number }) => {
+            const t = ticker.lastTime;
+            for (let i = 0; i < dustSprites.length; i++) {
+              const s = dustSprites[i];
+              const base = s.__baseAlpha ?? 0.5;
+              const phase = s.__twinklePhase ?? 0;
+              const wobble = 1 - TWINKLE_AMPLITUDE
+                + Math.sin(t * dustTwinkleSpeed + phase) * TWINKLE_AMPLITUDE;
+              s.alpha = base * wobble;
+            }
+          };
+          app.ticker.add(dustTick);
+        }
+
         const world = new Container();
         app.stage.addChild(world);
 
