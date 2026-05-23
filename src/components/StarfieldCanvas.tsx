@@ -380,7 +380,6 @@ export const StarfieldCanvas = () => {
           hitIndex,
         };
         setSceneReady(true);
-        console.log(`StarfieldCanvas: ${nodeContainers.length} nodes rendered`);
       })
       .catch((err: unknown) => {
         console.error('StarfieldCanvas: Pixi init failed', err);

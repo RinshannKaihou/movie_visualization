@@ -5,7 +5,6 @@ interface LoadingScreenProps {
 }
 
 export const LoadingScreen = ({ message = 'Loading...', progress, hint }: LoadingScreenProps) => {
-  console.log('LoadingScreen: Rendering with message:', message);
   const progressPercent = progress
     ? Math.round((progress.loaded / progress.total) * 100)
     : null;

@@ -5,7 +5,11 @@ const DB_NAME = 'movie-network-viz';
 // v4: positions are baked into cached graph data (Stage 1 of WebGL migration).
 // Older v3 entries lack x/y and would render piled at the origin now that the
 // runtime force simulation is frozen.
-const DB_VERSION = 4;
+//
+// Exported so the export button and the build script can write the same value
+// — keep `scripts/build-static-data.mjs` in sync if this changes (the .mjs
+// script can't import TS directly).
+export const DB_VERSION = 4;
 
 interface MovieCacheDB {
   movies: Movie[];
@@ -40,7 +44,6 @@ export const saveGraphData = async (
       version: DB_VERSION,
     };
     await db.put('cache', cacheData, 'graph-data');
-    console.log('Graph data cached successfully');
   } catch (error) {
     console.error('Failed to cache graph data:', error);
   }
@@ -56,13 +59,11 @@ export const loadGraphData = async (): Promise<{
     const cached = await db.get('cache', 'graph-data') as MovieCacheDB | undefined;
 
     if (!cached) {
-      console.log('No cached data found');
       return null;
     }
 
     // Check if cache is from the same version
     if (cached.version !== DB_VERSION) {
-      console.log('Cache version mismatch, ignoring cached data');
       return null;
     }
 
@@ -71,11 +72,9 @@ export const loadGraphData = async (): Promise<{
     const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     if (cacheAge > maxAge) {
-      console.log('Cache is too old, ignoring');
       return null;
     }
 
-    console.log('Loaded cached graph data');
     return {
       movies: cached.movies,
       graphData: cached.graphData,
@@ -91,7 +90,6 @@ export const clearCache = async (): Promise<void> => {
   try {
     const db = await initDB();
     await db.delete('cache', 'graph-data');
-    console.log('Cache cleared');
   } catch (error) {
     console.error('Failed to clear cache:', error);
   }

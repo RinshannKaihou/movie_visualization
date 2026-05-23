@@ -14,6 +14,12 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  forceSimulation,
+  forceLink,
+  forceManyBody,
+  forceCenter,
+} from 'd3-force';
 
 // ------------------------------------------------------------------
 // Configuration (keep in sync with useMovieData.ts / graphBuilder.ts)
@@ -21,7 +27,21 @@ import { fileURLToPath } from 'node:url';
 const MAX_MOVIES = 2000;
 const CAST_LIMIT = 10;      // mirrors tmdb.ts transformToMovie
 const KEYWORD_LIMIT = 20;   // mirrors tmdb.ts transformToMovie
-const CACHE_VERSION = 3;    // mirrors src/utils/cache.ts DB_VERSION
+
+// Keep in sync with src/utils/cache.ts:DB_VERSION. The runtime cache loader
+// rejects any version mismatch and the static-data loader silently downgrades
+// users to a layout-recompute on first load — so this MUST track.
+const CACHE_VERSION = 4;
+
+// Layout tuning — keep in sync with src/services/layout.ts constants.
+// These produce the deterministic positions that the renderer pins; changing
+// any of them re-shapes the visualization, so prefer not to.
+const LAYOUT_INITIAL_SCALE = 800;
+const LAYOUT_LINK_DISTANCE = 40;
+const LAYOUT_LINK_STRENGTH = 0.4;
+const LAYOUT_CHARGE_STRENGTH = -60;
+const LAYOUT_SEED = 1;         // mirrors useMovieData.ts ensurePositions
+const LAYOUT_ITERATIONS = 300; // mirrors useMovieData.ts ensurePositions
 
 // Graph tuning — mirrors graphBuilder.ts
 const CONNECTION_LIMITS = {
@@ -277,6 +297,53 @@ const buildGraphData = (movies) => {
 };
 
 // ------------------------------------------------------------------
+// Layout (ported from src/services/layout.ts — keep in sync)
+// ------------------------------------------------------------------
+// Mulberry32 — same PRNG as services/layout.ts so output is bit-stable across
+// the build script and the runtime worker for a given seed + input.
+const mulberry32 = (seed) => {
+  let t = seed >>> 0;
+  return () => {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const computeLayout = (movies, edges) => {
+  const rng = mulberry32(LAYOUT_SEED);
+  const layoutNodes = movies.map((m) => ({
+    id: m.id,
+    x: (rng() - 0.5) * LAYOUT_INITIAL_SCALE,
+    y: (rng() - 0.5) * LAYOUT_INITIAL_SCALE,
+  }));
+  const layoutLinks = edges.map((e) => ({
+    source: e.source,
+    target: e.target,
+    strength: e.strength,
+  }));
+
+  const sim = forceSimulation(layoutNodes)
+    .force(
+      'link',
+      forceLink(layoutLinks)
+        .id((d) => d.id)
+        .distance(LAYOUT_LINK_DISTANCE)
+        .strength((l) => LAYOUT_LINK_STRENGTH * (l.strength ?? 1)),
+    )
+    .force('charge', forceManyBody().strength(LAYOUT_CHARGE_STRENGTH))
+    .force('center', forceCenter(0, 0))
+    .stop();
+
+  for (let i = 0; i < LAYOUT_ITERATIONS; i++) sim.tick();
+
+  const positions = new Map();
+  for (const n of layoutNodes) positions.set(n.id, { x: n.x, y: n.y });
+  return positions;
+};
+
+// ------------------------------------------------------------------
 // Main
 // ------------------------------------------------------------------
 const main = async () => {
@@ -323,10 +390,24 @@ const main = async () => {
   }
 
   // 3. Build the graph
-  console.log('\nStep 3/3: building graph');
+  console.log('\nStep 3/4: building graph');
   const graphData = buildGraphData(movies);
 
-  // 4. Write to disk
+  // 4. Bake layout positions onto nodes (deterministic, seed=1, 300 iters)
+  // The runtime renderer reads x/y directly with no physics — see CLAUDE.md.
+  console.log('\nStep 4/4: computing layout positions');
+  const layoutStart = Date.now();
+  const positions = computeLayout(movies, graphData.links);
+  for (const node of graphData.nodes) {
+    const p = positions.get(node.id);
+    if (p) {
+      node.x = p.x;
+      node.y = p.y;
+    }
+  }
+  console.log(`  Layout done in ${((Date.now() - layoutStart) / 1000).toFixed(1)}s (seed=${LAYOUT_SEED}, ${LAYOUT_ITERATIONS} iterations)`);
+
+  // 5. Write to disk
   const payload = {
     movies,
     graphData,

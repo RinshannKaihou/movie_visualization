@@ -1,4 +1,4 @@
-import type { Movie, MovieNode, GraphData } from '../types';
+import type { Movie, GraphData } from '../types';
 
 interface ExportedData {
   movies: Movie[];
@@ -30,14 +30,11 @@ export const loadStaticData = async (): Promise<{
         if (response.ok) {
           const data: ExportedData = await response.json();
 
-          // Clean up nodes: remove any stale position/velocity data to ensure fresh simulation
-          const cleanNodes = data.graphData.nodes.map(node => {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { x, y, z, vx, vy, vz, ...cleanNode } = node;
-            return cleanNode as MovieNode;
-          });
-
-          // Ensure edges use numeric IDs (in case they were mutated to objects)
+          // Positions are baked in at build time (see scripts/build-static-data.mjs
+          // and CLAUDE.md's "Load priority" invariant). We pass nodes through
+          // verbatim so ensurePositions doesn't waste a worker run on first paint.
+          // Edges defensively unwrap legacy d3-mutated shapes — kept for backward
+          // compat with older exports; safe to drop once all deployed JSON is v4.
           const cleanEdges = data.graphData.links.map(edge => ({
             source: typeof edge.source === 'number' ? edge.source : (edge.source as { id: number }).id,
             target: typeof edge.target === 'number' ? edge.target : (edge.target as { id: number }).id,
@@ -46,11 +43,9 @@ export const loadStaticData = async (): Promise<{
           }));
 
           const graphData: GraphData = {
-            nodes: cleanNodes,
+            nodes: data.graphData.nodes,
             links: cleanEdges,
           };
-
-          console.log(`Static data loaded: ${data.movies.length} movies, ${graphData.nodes.length} nodes`);
 
           return {
             movies: data.movies,

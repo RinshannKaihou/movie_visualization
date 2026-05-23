@@ -19,13 +19,11 @@ const ensurePositions = async (
     && graphData.nodes.every(n => n.x != null && n.y != null);
   if (allPlaced) return graphData;
 
-  const layoutStart = performance.now();
   const positions = await runLayoutInWorker(
     movies,
     graphData.links,
     { seed: 1, iterations: 300 },
   );
-  console.log(`Layout done in ${(performance.now() - layoutStart).toFixed(0)}ms`);
 
   return {
     nodes: graphData.nodes.map(n => {

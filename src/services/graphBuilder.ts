@@ -53,8 +53,6 @@ export const calculateKeywordSimilarity = (keywords1: string[], keywords2: strin
 
 // Build graph data from movies using inverted indexes for O(n*k) instead of O(n²)
 export const buildGraphData = (movies: Movie[]): GraphData => {
-  const startTime = performance.now();
-
   const nodes: MovieNode[] = movies.map(movie => ({ ...movie }));
   const movieById = new Map(movies.map(movie => [movie.id, movie]));
 
@@ -207,18 +205,6 @@ export const buildGraphData = (movies: Movie[]): GraphData => {
 
   const rawEdges = Array.from(edgeMap.values());
   const edges = pruneEdges(rawEdges);
-  const buildTime = performance.now() - startTime;
-
-  console.log(
-    `Built graph: ${nodes.length} nodes, ${edges.length}/${rawEdges.length} edges kept in ${buildTime.toFixed(2)}ms`
-  );
-
-  // Log connection type distribution
-  const typeCounts = { same_actor: 0, same_director: 0, same_genre: 0, similar_plot: 0 };
-  edges.forEach(edge => {
-    edge.types.forEach(type => typeCounts[type]++);
-  });
-  console.log('Connection type distribution:', typeCounts);
 
   return { nodes, links: edges };
 };

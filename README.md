@@ -1,73 +1,80 @@
-# React + TypeScript + Vite
+# Movie Network
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An interactive starfield of 2000 top-rated movies. Each star is a film; edges connect movies that share actors, directors, or genres. Pan, zoom, and click to explore the constellations that famous careers and collaborations leave behind.
 
-Currently, two official plugins are available:
+**Live demo:** https://wangyipei06.github.io/movie_visualization/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+![Movie Network screenshot](docs/screenshot.png)
 
-## React Compiler
+> _Add `docs/screenshot.png` (or any other path) before publishing — the image link above is a placeholder._
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## What it does
 
-## Expanding the ESLint configuration
+- Renders ~2000 of TMDB's top-rated movies as a force-directed graph in WebGL.
+- Connects films by shared cast, shared director, or shared genre. Edge thickness encodes how many of those dimensions overlap.
+- Selecting a film fades the rest of the sky and animates photons along the strongest connections out of it.
+- Search and filter to narrow the constellation.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Tech stack
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| Library | Why |
+| --- | --- |
+| **React 19** + **TypeScript** | UI shell, panels, store wiring. |
+| **Pixi.js 8** (WebGL) | Single-batch renderer for 2000 nodes + ~10k edges at 60 fps. |
+| **d3-force** (in a Web Worker) | Deterministic seeded layout; positions are baked into the static data at build time so the deployed site does no physics at runtime. |
+| **d3-zoom / d3-selection** | Pan/zoom interaction that drives the Pixi world transform. |
+| **flatbush** | Static R-tree for O(log n) pointer hit-testing against pinned node positions. |
+| **Zustand** | Tiny store for selected movie, filters, search query, zoom level. |
+| **idb** | IndexedDB cache (7-day TTL) when running against the live TMDB API. |
+| **Vite 7** + **Tailwind v4** | Dev server, build, styling. |
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Running locally
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+You need Node.js ≥ 20.
+
+```bash
+git clone https://github.com/wangyipei06/movie_visualization.git
+cd movie_visualization
+cp .env.example .env          # fill in your TMDB key
+npm install
+npm run build:data            # fetch 2000 movies from TMDB (~5 minutes, one-time)
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Get a free TMDB API key at https://www.themoviedb.org/settings/api and put it in `.env` as `VITE_TMDB_API_KEY=...`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+If you already have `public/data/movies.json` (committed in this repo), you can skip `npm run build:data` and the dev server will load the static dataset directly.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Architecture in 90 seconds
+
+The data flows through three sources in priority order and every path funnels through the same position guard before the renderer ever sees a node:
+
+1. **Static JSON** (`public/data/movies.json`) — pre-built by `scripts/build-static-data.mjs` with layout positions baked in. This is what the deployed site uses.
+2. **IndexedDB cache** — 7-day TTL, holds the last fetched dataset with positions baked in.
+3. **Live TMDB** — paginated fetch with rate-limit backoff, runs the layout worker on first arrival, then caches.
+
+The Pixi scene graph is `stage → bgStars → world (pan/zoom target) → edges → nodes`. Pointer hits go through a flatbush R-tree built once from the pinned positions; the runtime physics simulation is **frozen** (no ticks). For more detail see [`CLAUDE.md`](./CLAUDE.md).
+
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Vite dev server with HMR. |
+| `npm run build` | TypeScript project-references check, then Vite production build. |
+| `npm run lint` | ESLint over the repo. |
+| `npm test` | Vitest run (single pass); `npm run test:watch` for watch mode. |
+| `npm run build:data` | Fetch 2000 top-rated movies from TMDB and emit `public/data/movies.json` with layout positions baked in. Required before deploying so the public site works without an API key. |
+| `npm run deploy` | `gh-pages -d dist` — manual deploy to GitHub Pages. |
+
+## Acknowledgements
+
+This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+<a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">
+  TMDB attribution logo
+</a>
+&nbsp;— download the official logo from https://www.themoviedb.org/about/logos-attribution and replace this link with an `<img>` before publishing.
+
+## License
+
+MIT — see [`LICENSE`](./LICENSE).

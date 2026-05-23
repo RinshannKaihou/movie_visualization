@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useGraphStore } from '../stores/graphStore';
 import type { MovieNode } from '../types';
+import { DB_VERSION } from '../utils/cache';
 
 export const ExportDataButton = () => {
   const [isExporting, setIsExporting] = useState(false);
@@ -41,7 +42,7 @@ export const ExportDataButton = () => {
           links: cleanEdges,
         },
         timestamp: Date.now(),
-        version: 3,
+        version: DB_VERSION,
       };
 
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -54,12 +55,6 @@ export const ExportDataButton = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-
-      console.log('Data exported:', {
-        movies: movies.length,
-        nodes: nodes.length,
-        edges: edges.length,
-      });
     } catch (error) {
       console.error('Export failed:', error);
       alert('Export failed. See console for details.');

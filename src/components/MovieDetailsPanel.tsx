@@ -16,12 +16,6 @@ export const MovieDetailsPanel = () => {
 
   // Group related movies by connection type
   const groupedConnections = useMemo<Record<ConnectionType, { movie: Movie; strength: number; allTypes: ConnectionType[] }[]>>(() => {
-    console.log('Computing groupedConnections:', { 
-      selectedMovieId: selectedMovie?.id, 
-      connectedCount: connectedMovieIds.size,
-      nodesCount: nodes.length 
-    });
-    
     if (!selectedMovie || connectedMovieIds.size === 0) {
       return { same_actor: [], same_director: [], same_genre: [], similar_plot: [] };
     }
@@ -89,7 +83,6 @@ export const MovieDetailsPanel = () => {
 
   // Handle clicking on a related movie
   const handleRelatedMovieClick = useCallback((movie: Movie) => {
-    console.log('Clicked related movie:', movie.id, movie.title);
     selectMovie(movie);
   }, [selectMovie]);
 
@@ -523,7 +516,6 @@ export const MovieDetailsPanel = () => {
                             role="button"
                             tabIndex={0}
                             onClick={(e) => {
-                              console.log('Related movie clicked:', movie.title);
                               e.stopPropagation();
                               handleRelatedMovieClick(movie);
                             }}
