@@ -2,70 +2,72 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> A parallel `AGENTS.md` exists for Codex with the same architectural notes — keep the two in sync when making meaningful changes.
+> `AGENTS.md` (for Codex) is a thin pointer to this file. Keep architecture notes here only.
 
 ## Common Commands
 
-- `npm run dev` — Vite dev server with HMR
-- `npm run build` — TypeScript project-references check, then Vite production build
+- `npm run dev` — Vite dev server with HMR (served under `/movie_visualization/`)
+- `npm run build` — TypeScript project-references check (`tsc -b`), then Vite production build
 - `npm run lint` — ESLint over the repo
-- `npm test` — Vitest run (single pass); `npm run test:watch` for watch mode. Tests live next to source as `*.test.ts(x)` and run under jsdom (the `canvas` npm package backs `getContext` so texture/glow code is testable).
-- `npm run build:data` — Run `scripts/build-static-data.mjs` to fetch 2000 top-rated movies from TMDB and emit `public/data/movies.json`. Required before deploying so the public site works without an API key.
-- `npm run deploy` — `gh-pages -d dist` (vite is configured with `base: '/movie_visualization/'`).
+- `npm test` — Vitest, single pass (`npm run test:watch` to watch). Tests live next to source as `*.test.ts(x)` under jsdom; the `canvas` package backs `getContext`.
+- `npm run data:build` — offline, deterministic: `data/movies.json` → similarity graph → layout → `src/generated/dataset.json`. Add `-- --preview out.png` to render the layout to a PNG for tuning.
+- `npm run data:fetch` — network: TMDB top-rated → `data/movies.json` (needs `TMDB_API_KEY`; `-- --limit N`). Refuses to overwrite the file if more than 2% of requests fail unless `-- --allow-partial`. Run `data:build` afterwards.
+- `npm run deploy` — `gh-pages -d dist` (Vite `base: '/movie_visualization/'`).
+
+Node ≥ 22.18 is required: the data scripts are `.ts` files run directly by Node's native type stripping.
 
 ## Environment Setup
 
-Create a `.env` file with `VITE_TMDB_API_KEY=...` (free key from https://www.themoviedb.org/settings/api). The key is needed for `npm run dev` only when the static dataset is missing, and for `npm run build:data`.
+`.env` holds `TMDB_API_KEY=…` (v3 key or v4 read-access token), used only by `data:fetch` in Node. **Never prefix it with `VITE_`**: Vite inlines every `import.meta.env.VITE_*` reference into the public bundle, which is how an earlier key leaked. The browser never talks to TMDB except for poster images.
 
 ## Project Architecture
 
-### Load priority (the key invariant)
+### Data pipeline (build time, never in the browser)
 
-`useMovieData` tries three sources in order, and **every** path funnels through `ensurePositions()` before calling `setGraphData`:
+```
+TMDB ──data:fetch──▶ data/movies.json ──data:build──▶ src/generated/dataset.json ──fetch──▶ app
+       (network)       (canonical, 1 movie/line)       (graph + baked positions)
+```
 
-1. `loadStaticData()` — fetch `public/data/movies.json` (the deployed-site path).
-2. `loadGraphData()` — IndexedDB cache (`movie-network-viz`, `DB_VERSION=4`, 7-day TTL). v4 bakes layout positions into the cached blob; older versions are intentionally rejected.
-3. `fetchMoviesWithDetails()` — live TMDB calls with rate-limit backoff.
+- `src/core/` is shared by the browser, the Node scripts, and tests. It must stay **DOM-free** and import siblings with explicit **`.ts` extensions** (Node's resolver needs them; Vite/tsc accept them via `allowImportingTsExtensions`). `erasableSyntaxOnly` is on, so no enums, namespaces, or constructor parameter properties anywhere.
+- `core/graph.ts` — similarity graph. Candidate pairs come from inverted indexes (directors, billing-weighted cast, IDF-weighted keywords with mood/meta tags stoplisted and `"city, country"` locations half-weighted); genre Jaccard only sharpens scores, plus a fallback so no film is isolated. Each film keeps its top neighbors under a degree cap. `sharedAttributes()` explains an edge to the UI.
+- `core/layout.ts` — seeded Mulberry32 + d3-force, deterministic for a given input. Genre-family anchors on a ring give readable continents; **only links with weight ≥ `layoutMinWeight` pull on the layout** (weak links are still drawn), which keeps clusters tight; collision turns on late (`collideAfter`). Retune with `data:build -- --preview`.
+- `core/dataset.ts` — format v5: one interned string table, tuple rows, flat edge quads, positions always baked. Decoding validates every field and throws a `DatasetError` (version mismatch → "run `data:build`"). The build stamps a hash of every pipeline input (`scripts/inputHash.ts`: the data plus the graph/layout/codec sources) into the file, and `scripts/dataset.test.ts` fails when it no longer matches — after editing any of those files, run `npm run data:build`.
+- `core/genres.ts` — the **single palette**. A film's family is its most distinctive genre by `GENRE_PRIORITY`, not `genres[0]`. Legend, panels, and stars all read from here.
+- Node indices (position in `dataset.nodes`), not TMDB ids, identify films everywhere at runtime; edges store indices.
 
-Why the funnel matters: the runtime force simulation is **frozen**. `StarfieldCanvas` reads `node.x/y` directly and does no physics ticks. Any node missing coordinates renders piled at the origin. `ensurePositions` calls the layout Web Worker (`runLayoutInWorker`) when needed; positions are then cached so reloads are pre-placed.
+### Runtime
 
-### Layout pipeline
+- `main.tsx` starts the dataset fetch (`stores/loadDataset.ts`, URL via `?url` so it is content-hashed) and the lazy Pixi chunk in parallel before React renders.
+- `stores/graphStore.ts` (Zustand) holds the dataset, `selected` / `hovered` node indices, `activeMask` (connection-type bits from `core/connections.ts`), `query`, and the ranked `matches` (search index built lazily on the first query). Components subscribe with narrow selectors.
+- `components/StarfieldCanvas.tsx` mounts the renderer once and pipes store changes in via `useGraphStore.subscribe` — hover, selection, search, and filters never re-render React for the canvas. `HoverCard` follows the pointer by writing `transform` directly.
+- `components/layout.ts` computes the screen insets panels cover (the camera asks before React mounts the details panel, so this is computed, not measured).
 
-- `services/graphBuilder.ts` — turns movies into nodes/edges via inverted indexes (actor/director/genre → movie IDs), with clique thresholds + `MAX_EDGES_PER_NODE` pruning to keep the graph readable. **`similar_plot` connections are currently disabled** (commented out for performance); the type still exists in the union but no edges are emitted with it at runtime. Also exports `getNodeColor`, `getEdgeColor`, `getNodeSize`, and the `SPECTRAL_COLORS` palette consumed by the renderer.
-- `services/layout.ts` — `computeLayout(movies, edges, {seed, iterations})` with seeded Mulberry32 RNG + d3-force. Deterministic for a given seed/input/engine. Pure (no DOM) so it runs in a worker and under tests.
-- `workers/layoutWorker.ts` + `services/layoutClient.ts` — single-shot worker (terminates after one layout). The duplicate copy of fetch + graph-build logic in `scripts/build-static-data.mjs` must be kept aligned with `services/tmdb.ts` and `services/graphBuilder.ts` when those change.
+### Renderer (`render/StarfieldRenderer.ts`, imperative Pixi v8)
 
-### Renderer (`components/StarfieldCanvas.tsx`)
+`stage → dust (2 TilingSprites, parallax) · world (render group, d3-zoom target) → edges · focusEdges · glows · rings · cores · labels (screen space)`.
 
-Pixi v8 scene graph: `stage → bgStars (no transform), world (pan/zoom target) → edgesLayer (Graphics, quadratic bezier curves) → nodesLayer (per-node Container of glow Sprite + ring Graphics + core Graphics + label Text)`.
+- **Render on demand.** `autoStart: false`; frames are requested only by camera moves, state changes, or running animations. Pixi's federated event system is detached and `Ticker.system` stopped — both otherwise spin `requestAnimationFrame` forever. Verify any change here by counting idle rAF callbacks (should be 0).
+- **Edges** (`render/edges.ts`) are built once as `pixelLine` hairline Graphics grouped by (mask, weight bucket). Filters and zoom LOD only flip `visible`/`tint`; nothing re-tessellates. Selected/hovered neighborhoods are redrawn in `focusEdges` with constant pixel width.
+- **Stars** are one glow + one disc sprite each (shared mipmapped textures, tinted). They grow sub-linearly with zoom (`radiusScale`), and hit-testing (`render/hitTest.ts`, Flatbush) uses the same scale.
+- **Labels** (`render/labels.ts`) are BitmapText placed greedily by priority (selected › hovered › neighbors/matches › ambient prominence) with a grid collision test, recomputed per camera frame, kept out of the areas UI chrome covers. Bitmap fonts are installed once per page after `document.fonts.load` (3 s timeout).
+- **Camera**: selection flies (d3 `interpolateZoom`) to center the film with its 75th-percentile neighbor radius in view; animations respect `useReducedMotion`. Only real user camera movement (a d3 `zoom` event with a `sourceEvent`, outside our own `setTransform`) cancels a flight — never d3's `start`, which fires on every mousedown.
 
-- **Pan/zoom** is driven by `d3-zoom` attached to the Pixi canvas; the zoom callback writes `world.position`/`world.scale` and pushes `zoom` into the store so `services/viewport.ts` LOD cutoffs (`lodStrengthCutoff`, `lodRatingCutoff`) can hide weak edges / dim stars at low zoom.
-- **Hit testing** uses `services/hitTest.ts`, a `flatbush` static R-tree built once from pinned positions. Pointer moves call `hitIndex.pick(x, y)` after inverting the world transform; selection is gated by a 3px click-vs-drag threshold.
-- **Glow** is a single white CPU-rendered Gaussian bitmap (`services/textures.ts::buildGlowBitmap`) uploaded once and tinted per-node via `sprite.tint`.
-- **Animations** (entrance stagger, focus alpha/scale tween, camera-fit tween on selection) all run through a small `tween()` helper and are short-circuited when `useReducedMotion()` is true. The idle ticker pauses 1s after the last interaction but stays awake until entrance finishes.
+### Type contracts (`core/types.ts`)
 
-### State (`stores/graphStore.ts`)
-
-Zustand store. Holds movies/nodes/edges, an `edgeAdjacency: Map<id, MovieEdge[]>` built once in `setGraphData` for O(1) neighborhood lookups, plus UI state (`selectedMovie`, `activeFilters`, `searchQuery`, `zoom`). Edge source/target are *numeric IDs* — d3-force used to mutate them into node objects, so getters defensively unwrap both shapes.
-
-`useGraphFilters` derives `visibleEdges` reactively: when a movie is selected it returns just that node's neighborhood; when there's a search query without a selection it limits to matching nodes; otherwise it returns the filter-toggle subset.
-
-### Type contracts
-
-- `Movie` — id/title/year/poster/rating/genres/directors/leadActors/plotKeywords/overview.
-- `MovieNode extends Movie` — adds optional x/y/z + vx/vy/vz. **Position is required at render time** (see invariant above).
-- `MovieEdge` — `{ source: number; target: number; types: ConnectionType[]; strength: number }` where `strength` equals `types.length` (1–4).
-- `ConnectionType` — `'same_actor' | 'same_director' | 'same_genre' | 'similar_plot'` (last one currently unused, see graphBuilder note).
-- `GraphData` — `{ nodes, links }` (note: `links`, not `edges`, in the container — the in-flight d3 / static-data naming carryover).
+- `Movie` — id, title, year, posterPath, rating, genres, directors, cast, keywords, overview.
+- `MovieNode extends Movie` — adds index, x, y, family, radius, degree. Positions are always present.
+- `Edge` — `{ source, target }` node indices, `mask` (connection bits), `weight` 0–1.
+- `ConnectionType` — `'director' | 'cast' | 'theme' | 'genre'`.
 
 ## Tech Stack
 
-- **Build**: Vite 7 + React 19 + Tailwind v4 (Vite plugin). `base: '/movie_visualization/'` for GitHub Pages.
+- **Build**: Vite 7 + React 19 + Tailwind v4 (`@theme` tokens and `@utility` classes in `src/index.css`). `base: '/movie_visualization/'`.
+- **Fonts**: self-hosted variable Fraunces (opsz, real italic) and JetBrains Mono via `@fontsource-variable/*`, imported in `main.tsx`. No Google Fonts: it was render-blocking and is unreachable in some regions.
 - **State**: Zustand 5.
-- **Graph**: Pixi.js 8 (WebGL) + d3-force (layout, in worker) + d3-zoom/d3-selection (camera) + flatbush (hit-test R-tree). `react-force-graph` and `three` were removed during the WebGL migration; do not reintroduce them.
-- **Storage**: `idb` for IndexedDB caching (positions baked in at v4).
-- **Testing**: Vitest + jsdom + `canvas` package (so Pixi/CPU-bitmap code can run headless).
+- **Graph**: Pixi.js 8 (WebGL) + d3-force (build-time layout) + d3-zoom/d3-selection/d3-interpolate (camera) + flatbush (hit testing). Do not reintroduce `react-force-graph`, `three`, IndexedDB caching, or in-browser TMDB fetching.
+- **Testing**: Vitest + jsdom + `canvas`.
 
 ## Worktree note
 
-`.worktrees/webgl-renderer/` is a sibling git worktree from the WebGL migration. Treat it as a separate checkout — don't accidentally edit files there from the main checkout.
+`.worktrees/webgl-renderer/` is a stale sibling worktree from the WebGL migration (behind `main`). Treat it as a separate checkout — don't edit files there from the main checkout.
