@@ -226,12 +226,24 @@ export const StarfieldCanvas = () => {
         app.stage.addChild(world);
 
         const setZoom = useGraphStore.getState().setZoom;
+        // The only consumer of store `zoom` is the edge-LOD rebuild (Effect 2),
+        // and lodStrengthCutoff() collapses the whole zoom range into 3 buckets.
+        // Writing raw zoom every wheel tick forced a React render + a full
+        // re-tessellation of ~9k bezier edges per frame of a zoom gesture. Gate
+        // the store write on the LOD bucket so the rebuild fires only when the
+        // visible edge set actually changes; the visual pan/zoom stays live via
+        // the world transform updated unconditionally above.
+        let lastStrengthCutoff = lodStrengthCutoff(1);
         const d3zoom = d3Zoom<HTMLCanvasElement, unknown>()
           .scaleExtent([0.15, 6])
           .on('zoom', (event: D3ZoomEvent<HTMLCanvasElement, unknown>) => {
             world.position.set(event.transform.x, event.transform.y);
             world.scale.set(event.transform.k);
-            setZoom(event.transform.k);
+            const cutoff = lodStrengthCutoff(event.transform.k);
+            if (cutoff !== lastStrengthCutoff) {
+              lastStrengthCutoff = cutoff;
+              setZoom(event.transform.k);
+            }
           });
         const sel: Selection<HTMLCanvasElement, unknown, null, undefined> =
           select(app.canvas as HTMLCanvasElement);
