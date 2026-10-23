@@ -1,4 +1,5 @@
 import type { Dataset, Edge, Movie, MovieNode } from './types.ts';
+import { ALL_CONNECTIONS_MASK } from './connections.ts';
 import { familyOf } from './genres.ts';
 import { nodeRadius } from './layout.ts';
 
@@ -32,6 +33,8 @@ export interface DatasetFile {
   version: number;
   fetchedAt: string;
   source: string;
+  /** Hash of the pipeline inputs this file was built from (see scripts/inputHash.ts). */
+  inputHash?: string;
   strings: string[];
   movies: MovieRecord[];
   /** Flat quads: source index, target index, connection mask, weight × 1000. */
@@ -48,6 +51,7 @@ export const encodeDataset = (input: {
   edges: readonly Edge[];
   fetchedAt: string;
   source: string;
+  inputHash?: string;
 }): DatasetFile => {
   const strings: string[] = [];
   const ids = new Map<string, number>();
@@ -79,7 +83,15 @@ export const encodeDataset = (input: {
   const edges: number[] = [];
   for (const e of input.edges) edges.push(e.source, e.target, e.mask, Math.round(e.weight * 1000));
 
-  return { version: DATASET_VERSION, fetchedAt: input.fetchedAt, source: input.source, strings, movies, edges };
+  return {
+    version: DATASET_VERSION,
+    fetchedAt: input.fetchedAt,
+    source: input.source,
+    inputHash: input.inputHash,
+    strings,
+    movies,
+    edges,
+  };
 };
 
 export const decodeDataset = (raw: unknown): Dataset => {
@@ -94,6 +106,10 @@ export const decodeDataset = (raw: unknown): Dataset => {
   const { strings, movies, edges: flatEdges } = file;
   if (!Array.isArray(strings) || !Array.isArray(movies) || !Array.isArray(flatEdges) || flatEdges.length % 4 !== 0) {
     throw new DatasetError('Dataset is missing strings, movies, or edges.');
+  }
+  if (movies.length === 0) throw new DatasetError('Dataset has no movies.');
+  if (file.fetchedAt && Number.isNaN(Date.parse(file.fetchedAt))) {
+    throw new DatasetError(`Dataset has an invalid fetchedAt date (${file.fetchedAt}).`);
   }
 
   const str = (i: number) => {
@@ -114,6 +130,9 @@ export const decodeDataset = (raw: unknown): Dataset => {
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       throw new DatasetError(`"${title}" has no layout position. Regenerate with \`npm run data:build\`.`);
     }
+    if (!Number.isFinite(rating) || !Number.isFinite(year)) {
+      throw new DatasetError(`"${title}" has an invalid rating or year.`);
+    }
     const genreNames = genres.map(str);
     return {
       id, title, year, posterPath, rating, overview,
@@ -133,14 +152,19 @@ export const decodeDataset = (raw: unknown): Dataset => {
   for (let i = 0; i < flatEdges.length; i += 4) {
     const source = flatEdges[i];
     const target = flatEdges[i + 1];
+    const mask = flatEdges[i + 2];
+    const weight = flatEdges[i + 3];
     if (!nodes[source] || !nodes[target] || source === target) {
       throw new DatasetError(`Edge ${i / 4} has invalid endpoints (${source}, ${target}).`);
+    }
+    if (!Number.isInteger(mask) || mask <= 0 || mask > ALL_CONNECTIONS_MASK || !(weight >= 0 && weight <= 1000)) {
+      throw new DatasetError(`Edge ${i / 4} has an invalid mask or weight.`);
     }
     adjacency[source].push(edges.length);
     adjacency[target].push(edges.length);
     nodes[source].degree++;
     nodes[target].degree++;
-    edges.push({ source, target, mask: flatEdges[i + 2], weight: flatEdges[i + 3] / 1000 });
+    edges.push({ source, target, mask, weight: weight / 1000 });
   }
 
   return {

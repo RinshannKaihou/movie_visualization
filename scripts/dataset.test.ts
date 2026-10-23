@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { decodeDataset } from '../src/core/dataset.ts';
+import { decodeDataset, type DatasetFile } from '../src/core/dataset.ts';
 import { KNOWN_GENRES } from '../src/core/genres.ts';
+import { hashPipelineInputs } from './inputHash.ts';
 import type { RawMoviesFile } from './tmdb.ts';
 
 // Guards the shipped data: a stale, unbaked dataset once reached production
@@ -12,9 +13,11 @@ import type { RawMoviesFile } from './tmdb.ts';
 describe('committed dataset', () => {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const raw = JSON.parse(readFileSync(resolve(root, 'data/movies.json'), 'utf8')) as RawMoviesFile;
-  const ds = decodeDataset(JSON.parse(readFileSync(resolve(root, 'src/generated/dataset.json'), 'utf8')));
+  const file = JSON.parse(readFileSync(resolve(root, 'src/generated/dataset.json'), 'utf8')) as DatasetFile;
+  const ds = decodeDataset(file);
 
-  it('is built from the current data/movies.json', () => {
+  it('was built from the current data and pipeline code (else run `npm run data:build`)', async () => {
+    expect(file.inputHash).toBe(await hashPipelineInputs(root));
     expect(ds.nodes.map(n => n.id)).toEqual(raw.movies.map(m => m.id));
   });
 

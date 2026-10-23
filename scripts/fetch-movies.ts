@@ -3,6 +3,7 @@
  *
  *   npm run data:fetch                  # 2000 movies
  *   npm run data:fetch -- --limit 500
+ *   npm run data:fetch -- --allow-partial   # keep results despite >2% failures
  *
  * Then run `npm run data:build` to rebuild the graph and layout. The
  * credential is read from TMDB_API_KEY (a v3 key or a v4 read access token)
@@ -17,6 +18,10 @@ import type { Movie } from '../src/core/types.ts';
 
 const OUTPUT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'data/movies.json');
 const CONCURRENCY = 8;
+// data/movies.json is the canonical input; a flaky run must not quietly
+// replace it with a partial catalog.
+const MAX_FAILURE_RATE = 0.02;
+const allowPartial = process.argv.includes('--allow-partial');
 const PAGE_SIZE = 20;
 
 const limitArg = process.argv.indexOf('--limit');
@@ -78,8 +83,11 @@ const details = await mapPool(ids, CONCURRENCY, async id => {
 });
 
 const movies = details.filter((m): m is Movie => m != null);
-if (movies.length === 0) {
-  console.error('\nNo movies fetched; leaving data/movies.json untouched.');
+if (movies.length === 0 || (failed / ids.length > MAX_FAILURE_RATE && !allowPartial)) {
+  console.error(
+    `\n${failed} of ${ids.length} movies failed; leaving data/movies.json untouched. ` +
+      'Re-run, or pass --allow-partial to keep what was fetched.',
+  );
   process.exit(1);
 }
 

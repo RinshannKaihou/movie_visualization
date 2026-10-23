@@ -52,6 +52,23 @@ describe('encode/decode', () => {
     expect(() => decodeDataset(file)).toThrow(/data:build/);
   });
 
+  it('rejects empty catalogs, bad dates, and non-finite numbers', () => {
+    expect(() => decodeDataset({ ...sample(), movies: [], edges: [] })).toThrow(/no movies/);
+    expect(() => decodeDataset({ ...sample(), fetchedAt: 'yesterday' })).toThrow(/fetchedAt/);
+    const badRating = sample();
+    badRating.movies[1][4] = Number.NaN;
+    expect(() => decodeDataset(badRating)).toThrow(/rating or year/);
+  });
+
+  it('rejects edges with an unknown mask or out-of-range weight', () => {
+    const badMask = sample();
+    badMask.edges[2] = 0;
+    expect(() => decodeDataset(badMask)).toThrow(/mask or weight/);
+    const badWeight = sample();
+    badWeight.edges[3] = 1500;
+    expect(() => decodeDataset(badWeight)).toThrow(/mask or weight/);
+  });
+
   it('rejects movies without positions and edges with bad endpoints', () => {
     const noPos = sample();
     noPos.movies[0][10] = null as unknown as number;

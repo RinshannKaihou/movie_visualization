@@ -19,6 +19,7 @@ import { familyOf } from '../src/core/genres.ts';
 import { CONNECTION_TYPES, typesFromMask } from '../src/core/connections.ts';
 import type { Movie } from '../src/core/types.ts';
 import type { RawMoviesFile } from './tmdb.ts';
+import { hashPipelineInputs } from './inputHash.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const INPUT = resolve(root, 'data/movies.json');
@@ -55,6 +56,7 @@ const file = encodeDataset({
   edges,
   fetchedAt: raw.fetchedAt,
   source: raw.source,
+  inputHash: await hashPipelineInputs(root),
 });
 const json = JSON.stringify(file);
 decodeDataset(JSON.parse(json)); // fail the build, not the browser, on a bad file
