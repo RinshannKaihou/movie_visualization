@@ -1,11 +1,18 @@
-import { GraphScene } from './components/GraphScene';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { Scene } from './components/Scene';
+import { ErrorScreen, LoadingVeil } from './components/StatusScreens';
+import { useGraphStore } from './stores/graphStore';
 
-function App() {
+export default function App() {
+  const status = useGraphStore(s => s.status);
+
+  if (status.phase === 'error') {
+    return <ErrorScreen message={status.message} onRetry={() => window.location.reload()} />;
+  }
   return (
-    <div style={{ width: '100vw', height: '100vh' }}>
-      <GraphScene />
-    </div>
+    <ErrorBoundary>
+      {status.phase === 'ready' && <Scene />}
+      <LoadingVeil />
+    </ErrorBoundary>
   );
 }
-
-export default App;
