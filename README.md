@@ -2,7 +2,7 @@
 
 An interactive star map of ~2,000 of TMDB's top-rated films. Each star is a film, and films sit next to the films they are most like: the same director, a shared cast, the same story themes. Search, filter, and click a star to see *why* its neighbors are its neighbors.
 
-**Live demo:** https://wangyipei06.github.io/movie_visualization/
+**Live demo:** https://rinshannkaihou.github.io/movie_visualization/
 
 ![CineVerse screenshot](docs/screenshot.png)
 
@@ -21,7 +21,7 @@ An interactive star map of ~2,000 of TMDB's top-rated films. Each star is a film
 Requires Node.js ≥ 22.18 (the data scripts are TypeScript run directly by Node).
 
 ```bash
-git clone https://github.com/wangyipei06/movie_visualization.git
+git clone https://github.com/RinshannKaihou/movie_visualization.git
 cd movie_visualization
 npm install
 npm run dev
