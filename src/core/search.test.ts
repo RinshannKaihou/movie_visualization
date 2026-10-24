@@ -4,7 +4,7 @@ import type { MovieNode } from './types.ts';
 
 const node = (index: number, over: Partial<MovieNode>): MovieNode => ({
   id: index + 1, index, title: '', year: 2000, posterPath: '', rating: 8, genres: [], directors: [],
-  cast: [], keywords: [], overview: '', x: 0, y: 0, family: 'drama', radius: 3, degree: 1,
+  cast: [], keywords: [], x: 0, y: 0, family: 'drama', radius: 3, degree: 1,
   ...over,
 });
 

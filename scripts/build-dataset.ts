@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { buildGraph, DEFAULT_GRAPH_PARAMS } from '../src/core/graph.ts';
 import { computeLayout, DEFAULT_LAYOUT_PARAMS, nodeRadius } from '../src/core/layout.ts';
-import { decodeDataset, encodeDataset } from '../src/core/dataset.ts';
+import { decodeDataset, decodeOverviews, encodeDataset, encodeOverviews } from '../src/core/dataset.ts';
 import { familyOf } from '../src/core/genres.ts';
 import { CONNECTION_TYPES, typesFromMask } from '../src/core/connections.ts';
 import type { Movie } from '../src/core/types.ts';
@@ -24,6 +24,7 @@ import { hashPipelineInputs } from './inputHash.ts';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const INPUT = resolve(root, 'data/movies.json');
 const OUTPUT = resolve(root, 'src/generated/dataset.json');
+const OVERVIEWS_OUTPUT = resolve(root, 'src/generated/overviews.json');
 
 const previewArg = process.argv.indexOf('--preview');
 const previewPath = previewArg > 0 ? resolve(process.cwd(), process.argv[previewArg + 1] ?? 'preview.png') : null;
@@ -50,19 +51,17 @@ const [minRating, maxRating] = [Math.min(...ratings), Math.max(...ratings)];
 const layoutNodes = movies.map(m => ({ family: familyOf(m.genres), radius: nodeRadius(m.rating, minRating, maxRating) }));
 const positions = time('layout', () => computeLayout(layoutNodes, edges, DEFAULT_LAYOUT_PARAMS));
 
-const file = encodeDataset({
-  movies,
-  positions,
-  edges,
-  fetchedAt: raw.fetchedAt,
-  source: raw.source,
-  inputHash: await hashPipelineInputs(root),
-});
+const inputHash = await hashPipelineInputs(root);
+const file = encodeDataset({ movies, positions, edges, fetchedAt: raw.fetchedAt, source: raw.source, inputHash });
 const json = JSON.stringify(file);
-decodeDataset(JSON.parse(json)); // fail the build, not the browser, on a bad file
+const overviewsJson = JSON.stringify(encodeOverviews(movies, inputHash));
+// Fail the build, not the browser, on a bad file.
+decodeDataset(JSON.parse(json));
+decodeOverviews(JSON.parse(overviewsJson));
 
 await mkdir(dirname(OUTPUT), { recursive: true });
 await writeFile(OUTPUT, json + '\n', 'utf8');
+await writeFile(OVERVIEWS_OUTPUT, overviewsJson + '\n', 'utf8');
 
 // --- report ---------------------------------------------------------------
 const degree = new Int32Array(movies.length);
@@ -77,10 +76,10 @@ console.log(`  edges    ${edges.length} (${JSON.stringify(typeCounts)})`);
 console.log(
   `  degree   min ${sortedDegree[0]} · median ${sortedDegree[sortedDegree.length >> 1]} · max ${sortedDegree.at(-1)}`,
 );
-console.log(
-  `  size     ${(json.length / 1024).toFixed(0)} KB raw · ${(gzipSync(json).length / 1024).toFixed(0)} KB gzip`,
-);
-console.log(`Wrote ${OUTPUT}`);
+const sizeOf = (s: string) => `${(s.length / 1024).toFixed(0)} KB raw · ${(gzipSync(s).length / 1024).toFixed(0)} KB gzip`;
+console.log(`  size     dataset ${sizeOf(json)} (critical path)`);
+console.log(`           overviews ${sizeOf(overviewsJson)} (loaded after first frame)`);
+console.log(`Wrote ${OUTPUT}\n      ${OVERVIEWS_OUTPUT}`);
 
 if (previewPath) {
   const { renderPreview } = await import('./preview.ts');

@@ -32,14 +32,14 @@ TMDB ──data:fetch──▶ data/movies.json ──data:build──▶ src/ge
 - `src/core/` is shared by the browser, the Node scripts, and tests. It must stay **DOM-free** and import siblings with explicit **`.ts` extensions** (Node's resolver needs them; Vite/tsc accept them via `allowImportingTsExtensions`). `erasableSyntaxOnly` is on, so no enums, namespaces, or constructor parameter properties anywhere.
 - `core/graph.ts` — similarity graph. Candidate pairs come from inverted indexes (directors, billing-weighted cast, IDF-weighted keywords with mood/meta tags stoplisted and `"city, country"` locations half-weighted); genre Jaccard only sharpens scores, plus a fallback so no film is isolated. Each film keeps its top neighbors under a degree cap. `sharedAttributes()` explains an edge to the UI.
 - `core/layout.ts` — seeded Mulberry32 + d3-force, deterministic for a given input. Genre-family anchors on a ring give readable continents; **only links with weight ≥ `layoutMinWeight` pull on the layout** (weak links are still drawn), which keeps clusters tight; collision turns on late (`collideAfter`). Retune with `data:build -- --preview`.
-- `core/dataset.ts` — format v5: one interned string table, tuple rows, flat edge quads, positions always baked. Decoding validates every field and throws a `DatasetError` (version mismatch → "run `data:build`"). The build stamps a hash of every pipeline input (`scripts/inputHash.ts`: the data plus the graph/layout/codec sources) into the file, and `scripts/dataset.test.ts` fails when it no longer matches — after editing any of those files, run `npm run data:build`.
+- `core/dataset.ts` — format v6: one interned string table, tuple rows, flat edge quads, positions always baked. Film overviews (a third of the bytes, needed only once a film is opened) ship separately in `src/generated/overviews.json` (TMDB id → text, same input hash). Decoding validates every field and throws a `DatasetError` (version mismatch → "run `data:build`"). The build stamps a hash of every pipeline input (`scripts/inputHash.ts`: the data plus the graph/layout/codec sources) into the file, and `scripts/dataset.test.ts` fails when it no longer matches — after editing any of those files, run `npm run data:build`.
 - `core/genres.ts` — the **single palette**. A film's family is its most distinctive genre by `GENRE_PRIORITY`, not `genres[0]`. Legend, panels, and stars all read from here.
 - Node indices (position in `dataset.nodes`), not TMDB ids, identify films everywhere at runtime; edges store indices.
 
 ### Runtime
 
-- `main.tsx` starts the dataset fetch (`stores/loadDataset.ts`, URL via `?url` so it is content-hashed) and the lazy Pixi chunk in parallel before React renders.
-- `stores/graphStore.ts` (Zustand) holds the dataset, `selected` / `hovered` node indices, `activeMask` (connection-type bits from `core/connections.ts`), `query`, and the ranked `matches` (search index built lazily on the first query). Components subscribe with narrow selectors.
+- `main.tsx` starts the dataset fetch (`stores/loadDataset.ts`, URL via `?url` so it is content-hashed) and the lazy Pixi chunk in parallel before React renders. `loadOverviews()` fetches the overviews file once the first frame is up (`App.tsx`); the details panel shows a skeleton if a film is opened before it lands.
+- `stores/graphStore.ts` (Zustand) holds the dataset, `overviews` (null until loaded), `selected` / `hovered` node indices, `activeMask` (connection-type bits from `core/connections.ts`), `query`, and the ranked `matches` (search index built lazily on the first query). Components subscribe with narrow selectors.
 - `components/StarfieldCanvas.tsx` mounts the renderer once and pipes store changes in via `useGraphStore.subscribe` — hover, selection, search, and filters never re-render React for the canvas. `HoverCard` follows the pointer by writing `transform` directly.
 - `components/layout.ts` computes the screen insets panels cover (the camera asks before React mounts the details panel, so this is computed, not measured).
 
@@ -56,7 +56,7 @@ TMDB ──data:fetch──▶ data/movies.json ──data:build──▶ src/ge
 ### Type contracts (`core/types.ts`)
 
 - `Movie` — id, title, year, posterPath, rating, genres, directors, cast, keywords, overview.
-- `MovieNode extends Movie` — adds index, x, y, family, radius, degree. Positions are always present.
+- `MovieNode extends Omit<Movie, 'overview'>` — adds index, x, y, family, radius, degree. Positions are always present; overviews come from the store.
 - `Edge` — `{ source, target }` node indices, `mask` (connection bits), `weight` 0–1.
 - `ConnectionType` — `'director' | 'cast' | 'theme' | 'genre'`.
 

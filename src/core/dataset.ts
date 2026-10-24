@@ -9,10 +9,14 @@ import { nodeRadius } from './layout.ts';
  * table, movies are tuples, edges are a flat number array. Positions are
  * always baked in; the browser does no layout work.
  *
+ * Overviews — a third of the bytes, needed only once a film is opened — live
+ * in a sibling file (src/generated/overviews.json) that the app fetches after
+ * the first frame, keeping them off the critical path.
+ *
  * Bump DATASET_VERSION on any shape change. The app refuses other versions
  * with a clear error instead of rendering garbage.
  */
-export const DATASET_VERSION = 5;
+export const DATASET_VERSION = 6;
 
 export type MovieRecord = [
   id: number,
@@ -24,7 +28,6 @@ export type MovieRecord = [
   directors: number[],
   cast: number[],
   keywords: number[],
-  overview: string,
   x: number,
   y: number,
 ];
@@ -75,7 +78,6 @@ export const encodeDataset = (input: {
     m.directors.map(intern),
     m.cast.map(intern),
     m.keywords.map(intern),
-    m.overview,
     input.positions[i * 2],
     input.positions[i * 2 + 1],
   ]);
@@ -126,7 +128,7 @@ export const decodeDataset = (raw: unknown): Dataset => {
   }
 
   const nodes: MovieNode[] = movies.map((r, index) => {
-    const [id, title, year, posterPath, rating, genres, directors, cast, keywords, overview, x, y] = r;
+    const [id, title, year, posterPath, rating, genres, directors, cast, keywords, x, y] = r;
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       throw new DatasetError(`"${title}" has no layout position. Regenerate with \`npm run data:build\`.`);
     }
@@ -135,7 +137,7 @@ export const decodeDataset = (raw: unknown): Dataset => {
     }
     const genreNames = genres.map(str);
     return {
-      id, title, year, posterPath, rating, overview,
+      id, title, year, posterPath, rating,
       genres: genreNames,
       directors: directors.map(str),
       cast: cast.map(str),
@@ -175,6 +177,35 @@ export const decodeDataset = (raw: unknown): Dataset => {
     adjacency,
     indexById: new Map(nodes.map(n => [n.id, n.index])),
   };
+};
+
+export interface OverviewsFile {
+  version: number;
+  /** Same hash as the dataset it was built with. */
+  inputHash?: string;
+  /** TMDB id → overview. Films without one are omitted. */
+  overviews: Record<string, string>;
+}
+
+export const encodeOverviews = (movies: readonly Movie[], inputHash?: string): OverviewsFile => ({
+  version: DATASET_VERSION,
+  inputHash,
+  overviews: Object.fromEntries(movies.filter(m => m.overview).map(m => [String(m.id), m.overview])),
+});
+
+export const decodeOverviews = (raw: unknown): Map<number, string> => {
+  const file = raw as Partial<OverviewsFile> | null;
+  if (file?.version !== DATASET_VERSION || !file.overviews || typeof file.overviews !== 'object') {
+    throw new DatasetError('Overviews file is missing or does not match the dataset version.');
+  }
+  const overviews = new Map<number, string>();
+  for (const [id, text] of Object.entries(file.overviews)) {
+    if (typeof text !== 'string' || !Number.isInteger(Number(id))) {
+      throw new DatasetError(`Overview for "${id}" is invalid.`);
+    }
+    overviews.set(Number(id), text);
+  }
+  return overviews;
 };
 
 /** The other endpoint of an edge. */

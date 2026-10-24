@@ -16,6 +16,15 @@ const movie = (id: number, title: string, over: Partial<Movie> = {}): Movie => (
   ...over,
 });
 
+/** Overviews for smallDataset(), as the deferred file would provide. */
+export const smallOverviews = (): Map<number, string> =>
+  new Map([
+    [1, 'Seven Samurai overview.'],
+    [2, 'Yojimbo overview.'],
+    [3, 'Ikiru overview.'],
+    [4, 'Amélie overview.'],
+  ]);
+
 /** Three Kurosawa films and one unrelated film, two edges. */
 export const smallDataset = (): Dataset =>
   decodeDataset(

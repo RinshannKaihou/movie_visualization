@@ -1,5 +1,6 @@
 import { useEffect, useMemo, type CSSProperties } from 'react';
 import { useGraphStore } from '../stores/graphStore';
+import { loadOverviews } from '../stores/loadDataset';
 import type { ConnectionType, Dataset } from '../core/types';
 import { CONNECTION_BIT, CONNECTION_META, primaryType } from '../core/connections';
 import { otherEnd, posterUrl, tmdbMovieUrl } from '../core/dataset';
@@ -49,6 +50,14 @@ export const DetailsPanel = () => {
   const selected = useGraphStore(s => s.selected);
   const activeMask = useGraphStore(s => s.activeMask);
   const select = useGraphStore(s => s.select);
+  const overviews = useGraphStore(s => s.overviews);
+
+  // Usually prefetched after the first frame; this covers a film opened
+  // before that. (Not on mount: the panel mounts with the scene, and an early
+  // fetch would compete with the critical-path downloads.)
+  useEffect(() => {
+    if (selected != null && overviews == null) void loadOverviews();
+  }, [selected, overviews]);
 
   const connections = useMemo(
     () => (dataset && selected != null ? connectionsOf(dataset, selected, activeMask) : []),
@@ -67,6 +76,7 @@ export const DetailsPanel = () => {
   if (!dataset || selected == null) return null;
   const movie = dataset.nodes[selected];
   const family = FAMILY_BY_ID.get(movie.family)!;
+  const overview = overviews?.get(movie.id);
 
   return (
     // Keyed by film: each selection mounts fresh, scrolled to the top.
@@ -115,7 +125,15 @@ export const DetailsPanel = () => {
           ))}
         </ul>
 
-        {movie.overview && <p className="mt-4 font-display text-[14.5px] leading-relaxed text-ink-dim">{movie.overview}</p>}
+        {overviews == null ? (
+          <div aria-hidden data-testid="overview-loading" className="mt-4 space-y-2.5 py-1">
+            <div className="h-2.5 w-full animate-pulse rounded-full bg-white/[0.07]" />
+            <div className="h-2.5 w-11/12 animate-pulse rounded-full bg-white/[0.07]" />
+            <div className="h-2.5 w-3/5 animate-pulse rounded-full bg-white/[0.07]" />
+          </div>
+        ) : (
+          overview && <p className="mt-4 font-display text-[14.5px] leading-relaxed text-ink-dim">{overview}</p>
+        )}
 
         {movie.cast.length > 0 && (
           <section className="mt-5">

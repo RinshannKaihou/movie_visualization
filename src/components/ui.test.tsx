@@ -1,8 +1,10 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGraphStore } from '../stores/graphStore';
-import { smallDataset } from '../test/fixtures';
+import { smallDataset, smallOverviews } from '../test/fixtures';
+import { loadOverviews } from '../stores/loadDataset';
+import { DATASET_VERSION } from '../core/dataset';
 import { DetailsPanel } from './DetailsPanel';
 import { SearchBox } from './SearchBox';
 import { LegendPanel } from './LegendPanel';
@@ -30,6 +32,7 @@ const typeInto = async (input: HTMLInputElement, text: string) => {
 beforeEach(() => {
   useGraphStore.setState(initial, true);
   useGraphStore.getState().setDataset(smallDataset());
+  useGraphStore.getState().setOverviews(smallOverviews());
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -59,6 +62,30 @@ describe('DetailsPanel', () => {
 
     await act(async () => container.querySelector<HTMLButtonElement>('ul.mt-2 button')!.click());
     expect(useGraphStore.getState().selected).toBe(1);
+  });
+
+  it('shows the overview, with a placeholder until the deferred file arrives', async () => {
+    useGraphStore.setState({ overviews: null });
+    let release = () => {};
+    const gate = new Promise<void>(resolve => (release = resolve));
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      await gate;
+      return new Response(JSON.stringify({ version: DATASET_VERSION, overviews: { 1: 'A village hires samurai.' } }));
+    }));
+    try {
+      await render(<DetailsPanel />);
+      await act(async () => useGraphStore.getState().select(0));
+      expect(container.querySelector('[data-testid=overview-loading]')).not.toBeNull();
+
+      await act(async () => {
+        release();
+        await loadOverviews();
+      });
+      expect(container.querySelector('[data-testid=overview-loading]')).toBeNull();
+      expect(container.textContent).toContain('A village hires samurai.');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('closes on Escape', async () => {

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { DATASET_VERSION, DatasetError, decodeDataset, encodeDataset, otherEnd, posterUrl } from './dataset.ts';
+import {
+  DATASET_VERSION,
+  DatasetError,
+  decodeDataset,
+  decodeOverviews,
+  encodeDataset,
+  encodeOverviews,
+  otherEnd,
+  posterUrl,
+} from './dataset.ts';
 import type { Movie } from './types.ts';
 
 const movie = (id: number, over: Partial<Movie> = {}): Movie => ({
@@ -77,6 +86,23 @@ describe('encode/decode', () => {
     const badEdge = sample();
     badEdge.edges.push(0, 99, 1, 500);
     expect(() => decodeDataset(badEdge)).toThrow(/endpoints/);
+  });
+});
+
+describe('overviews', () => {
+  it('round-trips by TMDB id and omits films without one', () => {
+    const file = JSON.parse(JSON.stringify(encodeOverviews([movie(1), movie(2, { overview: '' }), movie(3)], 'abc')));
+    expect(file.inputHash).toBe('abc');
+    expect(decodeOverviews(file)).toEqual(new Map([[1, 'Overview 1'], [3, 'Overview 3']]));
+  });
+
+  it('rejects other versions and non-string entries', () => {
+    expect(() => decodeOverviews({ version: DATASET_VERSION - 1, overviews: {} })).toThrow(DatasetError);
+    expect(() => decodeOverviews({ version: DATASET_VERSION, overviews: { 1: 42 } })).toThrow(/invalid/);
+  });
+
+  it('keeps overviews out of the dataset itself', () => {
+    expect(JSON.stringify(sample())).not.toContain('Overview 1');
   });
 });
 

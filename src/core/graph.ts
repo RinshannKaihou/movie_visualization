@@ -259,8 +259,10 @@ export interface SharedAttributes {
   genres: string[];
 }
 
+type Credits = Pick<Movie, 'directors' | 'cast' | 'keywords' | 'genres'>;
+
 /** What two movies have in common — the human-readable "why" of an edge. */
-export const sharedAttributes = (a: Movie, b: Movie): SharedAttributes => {
+export const sharedAttributes = (a: Credits, b: Credits): SharedAttributes => {
   const otherKeywords = new Set(b.keywords.map(normalizeKeyword));
   return {
     directors: a.directors.filter(d => b.directors.includes(d)),

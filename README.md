@@ -44,7 +44,7 @@ The key is only ever read by `data:fetch` in Node. Don't rename it to `VITE_TMDB
 ## How it works
 
 1. **Fetch** (`scripts/fetch-movies.ts`) pulls top-rated movies plus credits and keywords, eight requests at a time with rate-limit backoff, into a canonical `data/movies.json`.
-2. **Build** (`scripts/build-dataset.ts`) scores every pair of films that share something and keeps each film's strongest neighbors. A seeded d3-force layout then runs once, and the result is written as a compact dataset (~650 KB gzip) with positions baked in.
+2. **Build** (`scripts/build-dataset.ts`) scores every pair of films that share something and keeps each film's strongest neighbors. A seeded d3-force layout then runs once, and the result is written as a compact dataset (~410 KB gzip) with positions baked in. Film overviews go in a separate ~220 KB file that the app loads after the first frame.
 3. **Render** (`src/render/StarfieldRenderer.ts`): Pixi.js draws the stars and ~6,600 hairline edges with WebGL and only redraws when something changes, so an idle tab costs nothing. Filters and zoom levels toggle prebuilt edge layers instead of rebuilding geometry, and a Flatbush R-tree handles pointer picking.
 
 Shared logic in `src/core/` runs unchanged in the browser, in the Node scripts, and in tests. See [`CLAUDE.md`](./CLAUDE.md) for details.
