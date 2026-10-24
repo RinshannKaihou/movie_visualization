@@ -1,79 +1,71 @@
-# Movie Network
+# CineVerse
 
-An interactive starfield of 2000 top-rated movies. Each star is a film; edges connect movies that share actors, directors, or genres. Pan, zoom, and click to explore the constellations that famous careers and collaborations leave behind.
+An interactive star map of ~2,000 of TMDB's top-rated films. Each star is a film, and films sit next to the films they are most like: the same director, a shared cast, the same story themes. Search, filter, and click a star to see *why* its neighbors are its neighbors.
 
 **Live demo:** https://wangyipei06.github.io/movie_visualization/
 
-![Movie Network screenshot](docs/screenshot.png)
+![CineVerse screenshot](docs/screenshot.png)
 
-> _Add `docs/screenshot.png` (or any other path) before publishing — the image link above is a placeholder._
+> _Add `docs/screenshot.png` before publishing — the image link above is a placeholder._
 
 ## What it does
 
-- Renders ~2000 of TMDB's top-rated movies as a force-directed graph in WebGL.
-- Connects films by shared cast, shared director, or shared genre. Edge thickness encodes how many of those dimensions overlap.
-- Selecting a film fades the rest of the sky and animates photons along the strongest connections out of it.
-- Search and filter to narrow the constellation.
-
-## Tech stack
-
-| Library | Why |
-| --- | --- |
-| **React 19** + **TypeScript** | UI shell, panels, store wiring. |
-| **Pixi.js 8** (WebGL) | Single-batch renderer for 2000 nodes + ~10k edges at 60 fps. |
-| **d3-force** (in a Web Worker) | Deterministic seeded layout; positions are baked into the static data at build time so the deployed site does no physics at runtime. |
-| **d3-zoom / d3-selection** | Pan/zoom interaction that drives the Pixi world transform. |
-| **flatbush** | Static R-tree for O(log n) pointer hit-testing against pinned node positions. |
-| **Zustand** | Tiny store for selected movie, filters, search query, zoom level. |
-| **idb** | IndexedDB cache (7-day TTL) when running against the live TMDB API. |
-| **Vite 7** + **Tailwind v4** | Dev server, build, styling. |
+- Lays out 1,981 films as a galaxy whose "continents" are genre families, with tight constellations for auteurs and franchises (Kurosawa, Miyazaki, Nolan, Tarantino…).
+- Links films by **director**, **cast** (top billing counts more), **theme** (shared TMDB story keywords, weighted by rarity), and **genre**.
+- Selecting a film flies to its neighborhood and explains every link — e.g. *The Hidden Fortress: Dir. Akira Kurosawa · Toshirō Mifune, Takashi Shimura · jidaigeki*.
+- Search covers titles, directors, cast, keywords, genres, and years, accent-insensitively (`amelie` finds *Amélie*).
+- Works on phones (details become a bottom sheet), supports keyboard use (`/` search · `Esc` close · `+` `−` `0` zoom), and honors reduced-motion settings.
 
 ## Running locally
 
-You need Node.js ≥ 20.
+Requires Node.js ≥ 22.18 (the data scripts are TypeScript run directly by Node).
 
 ```bash
 git clone https://github.com/wangyipei06/movie_visualization.git
 cd movie_visualization
-cp .env.example .env          # fill in your TMDB key
 npm install
-npm run build:data            # fetch 2000 movies from TMDB (~5 minutes, one-time)
 npm run dev
 ```
 
-Get a free TMDB API key at https://www.themoviedb.org/settings/api and put it in `.env` as `VITE_TMDB_API_KEY=...`.
+The dataset is committed, so no API key is needed to run or deploy the site.
 
-If you already have `public/data/movies.json` (committed in this repo), you can skip `npm run build:data` and the dev server will load the static dataset directly.
+## Refreshing the data
 
-## Architecture in 90 seconds
+```bash
+cp .env.example .env     # set TMDB_API_KEY (v3 key or v4 read access token)
+npm run data:fetch       # TMDB → data/movies.json, ~1 minute
+npm run data:build       # graph + layout → src/generated/dataset.json
+```
 
-The data flows through three sources in priority order and every path funnels through the same position guard before the renderer ever sees a node:
+`data:build` is offline and deterministic, so you can tune the graph or layout without refetching. `npm run data:build -- --preview layout.png` renders the layout to an image.
 
-1. **Static JSON** (`public/data/movies.json`) — pre-built by `scripts/build-static-data.mjs` with layout positions baked in. This is what the deployed site uses.
-2. **IndexedDB cache** — 7-day TTL, holds the last fetched dataset with positions baked in.
-3. **Live TMDB** — paginated fetch with rate-limit backoff, runs the layout worker on first arrival, then caches.
+The key is only ever read by `data:fetch` in Node. Don't rename it to `VITE_TMDB_API_KEY`: Vite inlines `VITE_*` variables into the public JavaScript bundle.
 
-The Pixi scene graph is `stage → bgStars → world (pan/zoom target) → edges → nodes`. Pointer hits go through a flatbush R-tree built once from the pinned positions; the runtime physics simulation is **frozen** (no ticks). For more detail see [`CLAUDE.md`](./CLAUDE.md).
+## How it works
+
+1. **Fetch** (`scripts/fetch-movies.ts`) pulls top-rated movies plus credits and keywords, eight requests at a time with rate-limit backoff, into a canonical `data/movies.json`.
+2. **Build** (`scripts/build-dataset.ts`) scores every pair of films that share something and keeps each film's strongest neighbors. A seeded d3-force layout then runs once, and the result is written as a compact dataset (~650 KB gzip) with positions baked in.
+3. **Render** (`src/render/StarfieldRenderer.ts`): Pixi.js draws the stars and ~6,600 hairline edges with WebGL and only redraws when something changes, so an idle tab costs nothing. Filters and zoom levels toggle prebuilt edge layers instead of rebuilding geometry, and a Flatbush R-tree handles pointer picking.
+
+Shared logic in `src/core/` runs unchanged in the browser, in the Node scripts, and in tests. See [`CLAUDE.md`](./CLAUDE.md) for details.
 
 ## Scripts
 
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Vite dev server with HMR. |
-| `npm run build` | TypeScript project-references check, then Vite production build. |
-| `npm run lint` | ESLint over the repo. |
-| `npm test` | Vitest run (single pass); `npm run test:watch` for watch mode. |
-| `npm run build:data` | Fetch 2000 top-rated movies from TMDB and emit `public/data/movies.json` with layout positions baked in. Required before deploying so the public site works without an API key. |
-| `npm run deploy` | `gh-pages -d dist` — manual deploy to GitHub Pages. |
+| `npm run build` | Type-check (`tsc -b`), then production build. |
+| `npm test` | Vitest, single pass (`npm run test:watch` to watch). |
+| `npm run lint` | ESLint. |
+| `npm run data:fetch` | Fetch films from TMDB into `data/movies.json` (needs `TMDB_API_KEY`). |
+| `npm run data:build` | Rebuild graph, layout, and `src/generated/dataset.json` offline. |
+| `npm run deploy` | Publish `dist/` to GitHub Pages. |
 
 ## Acknowledgements
 
-This product uses the TMDB API but is not endorsed or certified by TMDB.
+This product uses the TMDB API but is not endorsed or certified by TMDB. Film data and posters © [The Movie Database (TMDB)](https://www.themoviedb.org/).
 
-<a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">
-  TMDB attribution logo
-</a>
-&nbsp;— download the official logo from https://www.themoviedb.org/about/logos-attribution and replace this link with an `<img>` before publishing.
+> _TMDB's [attribution guidelines](https://www.themoviedb.org/about/logos-attribution) also ask for their logo here — add it before publishing._
 
 ## License
 

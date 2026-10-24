@@ -1,160 +1,80 @@
 import { create } from 'zustand';
-import type { Movie, MovieNode, MovieEdge, ConnectionType, GraphData } from '../types';
+import type { ConnectionType, Dataset } from '../core/types';
+import { ALL_CONNECTIONS_MASK, CONNECTION_BIT } from '../core/connections';
+import { buildSearchIndex, type SearchIndex } from '../core/search';
+
+/**
+ * App state. Movies are referenced by node index (position in
+ * dataset.nodes) everywhere; TMDB ids only matter for outbound links.
+ *
+ * Components subscribe with narrow selectors (`useGraphStore(s => s.selected)`)
+ * so a hover never re-renders the details panel, and the canvas reads the
+ * store through `subscribe` without re-rendering React at all.
+ */
+
+export type LoadStatus =
+  | { phase: 'loading' }
+  | { phase: 'ready' }
+  | { phase: 'error'; message: string };
 
 interface GraphState {
-  // Data
-  movies: Movie[];
-  nodes: MovieNode[];
-  edges: MovieEdge[];
-  edgeAdjacency: Map<number, MovieEdge[]>;
+  dataset: Dataset | null;
+  /** Built lazily on the first query. */
+  searchIndex: SearchIndex | null;
+  status: LoadStatus;
+  /** True once the WebGL scene has drawn its first frame. */
+  sceneReady: boolean;
 
-  // UI State
-  selectedMovie: Movie | null;
-  hoveredMovie: Movie | null;
-  activeFilters: Set<ConnectionType>;
-  searchQuery: string;
+  selected: number | null;
+  hovered: number | null;
+  activeMask: number;
+  query: string;
+  /** Ranked search results for `query`; null when there is no query. */
+  matches: number[] | null;
 
-  // Loading states
-  isLoading: boolean;
-  isLoadingDetails: boolean;
-  error: string | null;
-
-  // Graph mode
-  is3DMode: boolean;
-
-  // Viewport (Pixi renderer only — Stage 2.9). The LOD helpers in
-  // services/viewport.ts read this at render time.
-  zoom: number;
-
-  // Actions
-  setMovies: (movies: Movie[]) => void;
-  setGraphData: (data: GraphData) => void;
-  selectMovie: (movie: Movie | null) => void;
-  hoverMovie: (movie: Movie | null) => void;
-  toggleFilter: (filter: ConnectionType) => void;
-  setActiveFilters: (filters: Set<ConnectionType>) => void;
-  setSearchQuery: (query: string) => void;
-  setLoading: (loading: boolean) => void;
-  setLoadingDetails: (loading: boolean) => void;
-  setError: (error: string | null) => void;
-  set3DMode: (is3D: boolean) => void;
-  setZoom: (zoom: number) => void;
-
-  // Computed getters
-  getFilteredEdges: () => MovieEdge[];
-  getConnectedEdges: (movieId: number) => MovieEdge[];
-  getConnectedMovieIds: (movieId: number) => number[];
+  setDataset: (dataset: Dataset) => void;
+  fail: (message: string) => void;
+  setSceneReady: (ready: boolean) => void;
+  select: (index: number | null) => void;
+  hover: (index: number | null) => void;
+  toggleConnection: (type: ConnectionType) => void;
+  showAllConnections: () => void;
+  setQuery: (query: string) => void;
 }
 
 export const useGraphStore = create<GraphState>((set, get) => ({
-  // Initial state
-  movies: [],
-  nodes: [],
-  edges: [],
-  edgeAdjacency: new Map<number, MovieEdge[]>(),
-  selectedMovie: null,
-  hoveredMovie: null,
-  activeFilters: new Set<ConnectionType>(['same_actor', 'same_director', 'same_genre', 'similar_plot']),
-  searchQuery: '',
-  isLoading: true,
-  isLoadingDetails: false,
-  error: null,
-  is3DMode: true,
-  zoom: 1,
+  dataset: null,
+  searchIndex: null,
+  status: { phase: 'loading' },
+  sceneReady: false,
+  selected: null,
+  hovered: null,
+  activeMask: ALL_CONNECTIONS_MASK,
+  query: '',
+  matches: null,
 
-  // Actions
-  setMovies: (movies) => set({ movies }),
+  setDataset: dataset => set({ dataset, searchIndex: null, status: { phase: 'ready' } }),
 
-  setGraphData: (data) => {
-    const edgeAdjacency = new Map<number, MovieEdge[]>();
+  fail: message => set({ status: { phase: 'error', message } }),
 
-    data.links.forEach(edge => {
-      const sourceId = edge.source as number;
-      const targetId = edge.target as number;
+  setSceneReady: sceneReady => set({ sceneReady }),
 
-      if (!edgeAdjacency.has(sourceId)) {
-        edgeAdjacency.set(sourceId, []);
-      }
-      if (!edgeAdjacency.has(targetId)) {
-        edgeAdjacency.set(targetId, []);
-      }
+  select: selected => set({ selected }),
 
-      edgeAdjacency.get(sourceId)!.push(edge);
-      edgeAdjacency.get(targetId)!.push(edge);
-    });
-
-    set({ nodes: data.nodes, edges: data.links, edgeAdjacency });
+  hover: hovered => {
+    if (get().hovered !== hovered) set({ hovered });
   },
 
-  selectMovie: (movie) => set({ selectedMovie: movie }),
+  toggleConnection: type => set(s => ({ activeMask: s.activeMask ^ CONNECTION_BIT[type] })),
 
-  hoverMovie: (movie) => set({ hoveredMovie: movie }),
+  showAllConnections: () => set({ activeMask: ALL_CONNECTIONS_MASK }),
 
-  toggleFilter: (filter) => {
-    const { activeFilters } = get();
-    const newFilters = new Set(activeFilters);
-    if (newFilters.has(filter)) {
-      newFilters.delete(filter);
-    } else {
-      newFilters.add(filter);
-    }
-    set({ activeFilters: newFilters });
-  },
-
-  setActiveFilters: (filters) => set({ activeFilters: filters }),
-
-  setSearchQuery: (query) => set({ searchQuery: query }),
-
-  setLoading: (loading) => set({ isLoading: loading }),
-
-  setLoadingDetails: (loading) => set({ isLoadingDetails: loading }),
-
-  setError: (error) => set({ error }),
-
-  set3DMode: (is3D) => set({ is3DMode: is3D }),
-
-  setZoom: (zoom) => set({ zoom }),
-
-  // Computed getters
-  getFilteredEdges: () => {
-    const { edges, activeFilters } = get();
-    if (activeFilters.size === 0) return [];
-    if (activeFilters.size === 4) return edges; // All filters active
-
-    return edges.filter(edge =>
-      edge.types.some(type => activeFilters.has(type))
-    );
-  },
-
-  getConnectedEdges: (movieId) => {
-    const { edgeAdjacency, activeFilters } = get();
-    const connectedEdges = edgeAdjacency.get(movieId) ?? [];
-
-    if (activeFilters.size === 4) {
-      return connectedEdges;
-    }
-
-    return connectedEdges.filter(edge =>
-      edge.types.some(type => activeFilters.has(type))
-    );
-  },
-
-  getConnectedMovieIds: (movieId) => {
-    const connectedEdges = get().getConnectedEdges(movieId);
-    const connectedIds = new Set<number>();
-
-    connectedEdges.forEach(edge => {
-      // Handle both raw IDs (number) and D3-processed references (object with id)
-      const sourceId = typeof edge.source === 'number' ? edge.source : (edge.source as MovieNode).id;
-      const targetId = typeof edge.target === 'number' ? edge.target : (edge.target as MovieNode).id;
-      
-      if (sourceId === movieId) {
-        connectedIds.add(targetId);
-      } else if (targetId === movieId) {
-        connectedIds.add(sourceId);
-      }
-    });
-
-    return Array.from(connectedIds);
+  // The index (~20 ms to build) is created on the first query, keeping it
+  // off the path to first paint.
+  setQuery: query => {
+    const { dataset } = get();
+    if (!dataset || query === get().query) return;
+    const searchIndex = get().searchIndex ?? buildSearchIndex(dataset.nodes);
+    set({ query, searchIndex, matches: searchIndex.search(query) });
   },
 }));
