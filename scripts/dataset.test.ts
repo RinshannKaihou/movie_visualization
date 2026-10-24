@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { decodeDataset, type DatasetFile } from '../src/core/dataset.ts';
+import { decodeDataset, decodeOverviews, type DatasetFile, type OverviewsFile } from '../src/core/dataset.ts';
 import { KNOWN_GENRES } from '../src/core/genres.ts';
 import { hashPipelineInputs } from './inputHash.ts';
 import type { RawMoviesFile } from './tmdb.ts';
@@ -25,6 +25,16 @@ describe('committed dataset', () => {
     expect(new Set(ds.nodes.map(n => n.id)).size).toBe(ds.nodes.length);
     expect(ds.nodes.every(n => Number.isFinite(n.x) && Number.isFinite(n.y))).toBe(true);
     expect(ds.nodes.every(n => n.degree > 0)).toBe(true);
+  });
+
+  it('ships overviews from the same build, keyed by the films it contains', () => {
+    const overviewsFile = JSON.parse(
+      readFileSync(resolve(root, 'src/generated/overviews.json'), 'utf8'),
+    ) as OverviewsFile;
+    expect(overviewsFile.inputHash).toBe(file.inputHash);
+    const overviews = decodeOverviews(overviewsFile);
+    expect([...overviews.keys()].every(id => ds.indexById.has(id))).toBe(true);
+    expect(overviews.size).toBe(raw.movies.filter(m => m.overview).length);
   });
 
   it('only uses genres the palette knows', () => {

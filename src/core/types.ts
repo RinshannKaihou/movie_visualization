@@ -32,8 +32,11 @@ export type GenreFamilyId =
   | 'crime'
   | 'other';
 
-/** A movie placed in the graph. `index` is its position in Dataset.nodes. */
-export interface MovieNode extends Movie {
+/**
+ * A movie placed in the graph. `index` is its position in Dataset.nodes.
+ * Overviews ship in a separate, lazily loaded file (see core/dataset.ts).
+ */
+export interface MovieNode extends Omit<Movie, 'overview'> {
   index: number;
   x: number;
   y: number;

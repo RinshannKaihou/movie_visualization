@@ -4,9 +4,7 @@ An interactive star map of ~2,000 of TMDB's top-rated films. Each star is a film
 
 **Live demo:** https://rinshannkaihou.github.io/movie_visualization/
 
-![CineVerse screenshot](docs/screenshot.png)
-
-> _Add `docs/screenshot.png` before publishing — the image link above is a placeholder._
+![CineVerse: about 2,000 films as a star map, clustered into genre continents](docs/screenshot.webp)
 
 ## What it does
 
@@ -15,6 +13,8 @@ An interactive star map of ~2,000 of TMDB's top-rated films. Each star is a film
 - Selecting a film flies to its neighborhood and explains every link — e.g. *The Hidden Fortress: Dir. Akira Kurosawa · Toshirō Mifune, Takashi Shimura · jidaigeki*.
 - Search covers titles, directors, cast, keywords, genres, and years, accent-insensitively (`amelie` finds *Amélie*).
 - Works on phones (details become a bottom sheet), supports keyboard use (`/` search · `Esc` close · `+` `−` `0` zoom), and honors reduced-motion settings.
+
+![Seven Samurai opened: its Kurosawa constellation, and why each linked film is linked](docs/screenshot-details.webp)
 
 ## Running locally
 
@@ -44,7 +44,7 @@ The key is only ever read by `data:fetch` in Node. Don't rename it to `VITE_TMDB
 ## How it works
 
 1. **Fetch** (`scripts/fetch-movies.ts`) pulls top-rated movies plus credits and keywords, eight requests at a time with rate-limit backoff, into a canonical `data/movies.json`.
-2. **Build** (`scripts/build-dataset.ts`) scores every pair of films that share something and keeps each film's strongest neighbors. A seeded d3-force layout then runs once, and the result is written as a compact dataset (~650 KB gzip) with positions baked in.
+2. **Build** (`scripts/build-dataset.ts`) scores every pair of films that share something and keeps each film's strongest neighbors. A seeded d3-force layout then runs once, and the result is written as a compact dataset (~410 KB gzip) with positions baked in. Film overviews go in a separate ~220 KB file that the app loads after the first frame.
 3. **Render** (`src/render/StarfieldRenderer.ts`): Pixi.js draws the stars and ~6,600 hairline edges with WebGL and only redraws when something changes, so an idle tab costs nothing. Filters and zoom levels toggle prebuilt edge layers instead of rebuilding geometry, and a Flatbush R-tree handles pointer picking.
 
 Shared logic in `src/core/` runs unchanged in the browser, in the Node scripts, and in tests. See [`CLAUDE.md`](./CLAUDE.md) for details.
@@ -63,9 +63,9 @@ Shared logic in `src/core/` runs unchanged in the browser, in the Node scripts, 
 
 ## Acknowledgements
 
-This product uses the TMDB API but is not endorsed or certified by TMDB. Film data and posters © [The Movie Database (TMDB)](https://www.themoviedb.org/).
+<a href="https://www.themoviedb.org/"><img src="https://www.themoviedb.org/assets/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="The Movie Database (TMDB)" width="150"></a>
 
-> _TMDB's [attribution guidelines](https://www.themoviedb.org/about/logos-attribution) also ask for their logo here — add it before publishing._
+This product uses the TMDB API but is not endorsed or certified by TMDB. Film data and posters © [The Movie Database (TMDB)](https://www.themoviedb.org/).
 
 ## License
 

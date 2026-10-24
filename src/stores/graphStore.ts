@@ -24,6 +24,8 @@ interface GraphState {
   status: LoadStatus;
   /** True once the WebGL scene has drawn its first frame. */
   sceneReady: boolean;
+  /** TMDB id → overview; null until the deferred file arrives. */
+  overviews: Map<number, string> | null;
 
   selected: number | null;
   hovered: number | null;
@@ -35,6 +37,7 @@ interface GraphState {
   setDataset: (dataset: Dataset) => void;
   fail: (message: string) => void;
   setSceneReady: (ready: boolean) => void;
+  setOverviews: (overviews: Map<number, string>) => void;
   select: (index: number | null) => void;
   hover: (index: number | null) => void;
   toggleConnection: (type: ConnectionType) => void;
@@ -47,6 +50,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   searchIndex: null,
   status: { phase: 'loading' },
   sceneReady: false,
+  overviews: null,
   selected: null,
   hovered: null,
   activeMask: ALL_CONNECTIONS_MASK,
@@ -58,6 +62,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   fail: message => set({ status: { phase: 'error', message } }),
 
   setSceneReady: sceneReady => set({ sceneReady }),
+
+  setOverviews: overviews => set({ overviews }),
 
   select: selected => set({ selected }),
 
